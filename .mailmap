@@ -1,0 +1,4 @@
+# Map the work-email commits (authored as "Developer <yoshi@soundraw.co.jp>") to the
+# public identity, so shortlog/GitHub display one author. History itself is untouched.
+Yoshi Kondo <yoshi@musicailab.com> <yoshi@soundraw.co.jp>
+Yoshi Kondo <yoshi@musicailab.com> <yksanjo@gmail.com>

@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Conductor — autopilot for your Claude Code fleet, with a hard stop you control</title>
+<meta name="description" content="Your agents run the reversible work unattended. A model-free gate stops the fleet before anything that deploys, sends, deletes, or spends — and hands that one call to you. Open-source MCP server, zero dependencies." />
+<meta property="og:title" content="Conductor — your agents run unattended, until something can't be undone" />
+<meta property="og:description" content="Autopilot for a fleet of Claude Code agents: they fly the reversible work on their own; a model-free irreversibility gate stops before deploy, send, delete, or spend and hands the decision to you. You can look away because it can't ship without you." />
+<meta property="og:type" content="website" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%F0%9F%8E%BC</text></svg>" />
+<style>
+  :root{
+    --bg:#0f0e0c;
+    --bg-soft:#17150f;
+    --ink:#f4f1ea;
+    --ink-soft:#b3ada1;
+    --ink-faint:#7d776c;
+    --line:#2a2720;
+    --line-strong:#3a362d;
+    --accent:#a5b4fc;
+    --accent-strong:#6366f1;
+    --accent-soft:#1c1b33;
+    --green:#5bc46d;
+    --green-bg:#15271a;
+    --amber:#f4bf4f;
+    --amber-bg:#2a2110;
+    --red:#ff6b5e;
+    --red-bg:#2c1513;
+    --card:#1a1812;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 12px 34px rgba(0,0,0,.35);
+    --radius:14px;
+    --mono:"SF Mono",ui-monospace,"JetBrains Mono","Menlo",monospace;
+    --sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--bg);color:var(--ink);font-family:var(--sans);
+    line-height:1.55;-webkit-font-smoothing:antialiased;
+    font-size:17px;
+  }
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 28px}
+  .accent{color:var(--accent)}
+  .mono{font-family:var(--mono)}
+
+  /* ---------- nav ---------- */
+  nav{
+    position:sticky;top:0;z-index:50;
+    background:color-mix(in srgb,var(--bg) 88%,transparent);
+    backdrop-filter:saturate(150%) blur(10px);
+    border-bottom:1px solid var(--line);
+  }
+  nav .wrap{display:flex;align-items:center;justify-content:space-between;height:62px}
+  .brand{display:flex;align-items:center;gap:9px;font-weight:600;font-size:18px;letter-spacing:-.01em}
+  .brand .glyph{font-size:20px}
+  .navlinks{display:flex;align-items:center;gap:26px;font-size:15px;color:var(--ink-soft)}
+  .navlinks a:hover{color:var(--ink)}
+  .navlinks .cta{color:var(--accent);font-weight:600}
+  @media(max-width:720px){.navlinks a:not(.cta){display:none}}
+
+  /* ---------- buttons ---------- */
+  .btn{
+    display:inline-flex;align-items:center;gap:8px;
+    padding:12px 20px;border-radius:10px;font-weight:600;font-size:15.5px;
+    border:1px solid transparent;transition:.15s ease;cursor:pointer;white-space:nowrap;
+  }
+  .btn-primary{background:var(--accent-strong);color:#fff;box-shadow:0 1px 2px rgba(0,0,0,.4)}
+  .btn-primary:hover{background:#4f46e5;transform:translateY(-1px)}
+  .btn-ghost{background:var(--card);color:var(--ink);border-color:var(--line-strong)}
+  .btn-ghost:hover{border-color:var(--ink-faint);transform:translateY(-1px)}
+
+  /* ---------- hero ---------- */
+  header.hero{padding:84px 0 56px;text-align:center}
+  .eyebrow{
+    display:inline-flex;align-items:center;gap:8px;
+    font-size:13.5px;font-weight:600;letter-spacing:.02em;
+    color:var(--accent);background:var(--accent-soft);
+    padding:6px 13px;border-radius:999px;margin-bottom:26px;
+  }
+  h1{
+    font-size:clamp(34px,6vw,58px);line-height:1.04;letter-spacing:-.028em;
+    font-weight:700;max-width:14ch;margin:0 auto 22px;
+  }
+  .sub{font-size:clamp(17px,2.2vw,20px);color:var(--ink-soft);max-width:60ch;margin:0 auto 34px}
+  .hero-cta{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+  .hero-note{margin-top:18px;font-size:13.5px;color:var(--ink-faint);font-family:var(--mono)}
+
+  /* ---------- terminal / cockpit mock ---------- */
+  .stage{margin:54px auto 0;max-width:920px}
+  .term{
+    background:#131109;border:1px solid var(--line-strong);border-radius:var(--radius);
+    box-shadow:var(--shadow);overflow:hidden;text-align:left;
+  }
+  .term-bar{
+    display:flex;align-items:center;gap:7px;padding:12px 16px;
+    background:var(--bg-soft);border-bottom:1px solid var(--line);
+  }
+  .dot{width:11px;height:11px;border-radius:50%}
+  .dot.r{background:#ef6b62}.dot.y{background:#f4bf4f}.dot.g{background:#5bc46d}
+  .term-title{margin-left:10px;font-family:var(--mono);font-size:12.5px;color:var(--ink-faint)}
+  .term-body{padding:20px 22px;font-family:var(--mono);font-size:13px;line-height:1.5}
+  .grouphdr{
+    display:flex;align-items:center;gap:10px;color:var(--ink-faint);
+    font-size:11.5px;letter-spacing:.08em;font-weight:600;margin:18px 0 12px;
+  }
+  .grouphdr:first-child{margin-top:0}
+  .grouphdr .rule{flex:1;height:1px;background:var(--line)}
+  .scard{
+    border:1px solid var(--line);border-left:3px solid var(--line-strong);
+    border-radius:10px;padding:12px 14px;margin-bottom:11px;background:#1b1810;
+  }
+  .scard.work{border-left-color:var(--green)}
+  .scard.open{border-left-color:var(--amber)}
+  .scard.gated{border-left-color:var(--red)}
+  .scard-top{display:flex;align-items:center;gap:9px;min-width:0}
+  .pip{width:8px;height:8px;border-radius:50%;flex:none}
+  .pip.g{background:var(--green);box-shadow:0 0 0 3px var(--green-bg)}
+  .pip.a{background:var(--amber);box-shadow:0 0 0 3px var(--amber-bg)}
+  .pip.r{background:var(--red);box-shadow:0 0 0 3px var(--red-bg)}
+  .scard-title{font-weight:600;color:var(--ink);font-family:var(--sans);font-size:14px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .scard-meta{margin-left:auto;color:var(--ink-faint);font-size:11.5px;flex:none;align-self:center}
+  .pip{align-self:center}
+  .scard-label{color:var(--accent);font-size:11.5px;margin:5px 0 6px;font-weight:600}
+  .scard-action{color:var(--ink-soft);font-size:12.5px}
+  .scard-action .arrow{color:var(--ink-faint)}
+  .badge{
+    font-family:var(--sans);font-size:10.5px;font-weight:700;letter-spacing:.04em;
+    padding:3px 8px;border-radius:5px;text-transform:uppercase;line-height:1.2;
+    display:inline-block;flex:none;white-space:nowrap;
+  }
+  .badge.managed{background:var(--accent-soft);color:var(--accent)}
+  .badge.b-gate{background:var(--red-bg);color:var(--red)}
+  .replybar{
+    display:flex;gap:7px;flex-wrap:wrap;margin-top:10px;padding-top:11px;border-top:1px dashed var(--line)
+  }
+  .chip{
+    font-family:var(--sans);font-size:11.5px;font-weight:600;color:var(--ink-soft);
+    border:1px solid var(--line-strong);border-radius:7px;padding:4px 10px;background:#211d15;
+  }
+  .chip.go{color:var(--green);border-color:var(--green-bg)}
+
+  /* ---------- generic sections ---------- */
+  section{padding:72px 0}
+  .sec-eyebrow{font-size:13.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);margin-bottom:14px}
+  h2{font-size:clamp(28px,4vw,40px);letter-spacing:-.022em;line-height:1.1;font-weight:700;max-width:20ch}
+  .lead{font-size:19px;color:var(--ink-soft);max-width:62ch;margin-top:18px}
+  .divider{border-top:1px solid var(--line)}
+
+  /* ---------- stats ---------- */
+  .stats{background:var(--bg-soft);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .stats .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:40px}
+  @media(max-width:720px){.stats .grid{grid-template-columns:1fr;gap:34px}}
+  .stat .num{font-size:48px;font-weight:700;letter-spacing:-.03em;line-height:1}
+  .stat .lab{margin-top:12px;color:var(--ink-soft);font-size:15.5px;max-width:30ch}
+  .stat .src{margin-top:8px;color:var(--ink-faint);font-size:12.5px}
+
+  /* ---------- two-col feature ---------- */
+  .feat{display:grid;grid-template-columns:1.05fr 1fr;gap:56px;align-items:center}
+  .feat.flip .copy{order:2}
+  @media(max-width:840px){.feat,.feat.flip{grid-template-columns:1fr;gap:30px}.feat.flip .copy{order:0}}
+  .feat h3{font-size:26px;letter-spacing:-.02em;margin-bottom:8px}
+  .feat .kicker{color:var(--accent);font-weight:600;font-size:15px;margin-bottom:6px}
+  .feat p{color:var(--ink-soft);margin-bottom:14px}
+  .feat ul{list-style:none;display:flex;flex-direction:column;gap:11px}
+  .feat li{display:flex;gap:11px;align-items:flex-start;font-size:15.5px}
+  .feat li .tick{color:var(--green);font-weight:700;flex:none;margin-top:1px}
+
+  /* ---------- gate callout ---------- */
+  .gate{background:linear-gradient(180deg,#15130d,#0c0b08);border:1px solid var(--line-strong);color:#f4f2ed;border-radius:18px;padding:48px;margin-top:8px;position:relative;overflow:hidden}
+  .gate h2{color:#fff;max-width:18ch}
+  .gate .lead{color:#bdb7ab}
+  .gate-flow{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:34px}
+  @media(max-width:720px){.gate{padding:30px}.gate-flow{grid-template-columns:1fr}}
+  .gate-card{background:#211e17;border:1px solid #34302618;border-color:#34302a;border-radius:12px;padding:20px}
+  .gate-card .gh{font-family:var(--mono);font-size:12px;letter-spacing:.05em;margin-bottom:10px}
+  .gate-card.pass .gh{color:#7bd88f}
+  .gate-card.stop .gh{color:#ff9b8a}
+  .gate-card .q{font-size:14.5px;color:#e9e5db;margin-bottom:6px}
+  .gate-card .verdict{font-family:var(--mono);font-size:12.5px;color:#9a9488}
+
+  /* ---------- features grid ---------- */
+  .cards{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;margin-top:40px}
+  @media(max-width:720px){.cards{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:26px;transition:.15s}
+  .card:hover{border-color:var(--line-strong);box-shadow:var(--shadow)}
+  .card .ico{font-size:24px;margin-bottom:14px;display:block}
+  .card h4{font-size:18px;letter-spacing:-.01em;margin-bottom:7px}
+  .card p{color:var(--ink-soft);font-size:14.5px}
+  .card code{font-family:var(--mono);font-size:12.5px;background:var(--bg-soft);padding:1px 6px;border-radius:5px}
+
+  /* ---------- adapters table ---------- */
+  .adtable{margin-top:34px;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:var(--card)}
+  .adrow{display:grid;grid-template-columns:1.1fr 2fr 1.4fr;gap:18px;padding:18px 22px;border-bottom:1px solid var(--line);align-items:center;font-size:14.5px}
+  .adrow:last-child{border-bottom:0}
+  .adrow.head{background:var(--bg-soft);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-faint);font-weight:700}
+  .adrow .nm{font-family:var(--mono);font-weight:600;color:var(--accent);font-size:13.5px}
+  .adrow .dsc{color:var(--ink-soft)}
+  .adrow .ctl{color:var(--ink-faint);font-size:13px}
+  @media(max-width:720px){.adrow{grid-template-columns:1fr;gap:5px}.adrow.head{display:none}.adrow .nm{font-size:15px}}
+
+  /* ---------- formations (V2) ---------- */
+  .forms{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:38px}
+  @media(max-width:840px){.forms{grid-template-columns:1fr}}
+  .fcard{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:24px;display:flex;flex-direction:column}
+  .fcard:hover{border-color:var(--line-strong)}
+  .fcard .ftop{display:flex;align-items:center;gap:9px;margin-bottom:4px}
+  .fcard .femoji{font-size:20px}
+  .fcard h4{font-size:17px;letter-spacing:-.01em}
+  .fcard .fsub{color:var(--ink-faint);font-size:12.5px;font-weight:600;letter-spacing:.02em;margin-bottom:16px}
+  .fcard pre{
+    font-family:var(--mono);font-size:12px;line-height:1.45;color:var(--accent);
+    background:#0c0b08;border:1px solid var(--line);border-radius:9px;padding:14px;margin-bottom:14px;
+    white-space:pre;overflow-x:auto;
+  }
+  .fcard p{color:var(--ink-soft);font-size:13.5px}
+  .v2bar{
+    display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin-top:26px;padding:22px 24px;
+    background:var(--bg-soft);border:1px solid var(--line);border-radius:var(--radius);
+  }
+  .v2bar .vtext{flex:1;min-width:240px;color:var(--ink-soft);font-size:14.5px}
+  .v2bar code{font-family:var(--mono);font-size:12.5px;background:#0c0b08;border:1px solid var(--line);padding:2px 7px;border-radius:5px;color:var(--ink)}
+
+  /* ---------- install / code ---------- */
+  .codeblock{
+    background:#16140f;color:#e9e5db;border-radius:12px;padding:20px 22px;
+    font-family:var(--mono);font-size:13.5px;line-height:1.7;overflow-x:auto;text-align:left;
+  }
+  .codeblock .c{color:#8b857c}
+  .codeblock .p{color:#7bd88f}
+  .codeblock .k{color:#9db4ff}
+
+  /* ---------- get started ---------- */
+  .start{background:var(--bg-soft);border-top:1px solid var(--line)}
+  .start .grid{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:38px}
+  @media(max-width:720px){.start .grid{grid-template-columns:1fr}}
+  .startcard{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:30px;display:flex;flex-direction:column}
+  .startcard .tag{font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--green);margin-bottom:14px}
+  .startcard .tag.soon{color:var(--accent)}
+  .startcard h4{font-size:21px;letter-spacing:-.01em;margin-bottom:10px}
+  .startcard p{color:var(--ink-soft);font-size:15px;margin-bottom:20px;flex:1}
+  .startcard .btn{align-self:flex-start}
+
+  /* ---------- faq ---------- */
+  .faq details{border-bottom:1px solid var(--line);padding:20px 0}
+  .faq summary{font-size:18px;font-weight:600;cursor:pointer;list-style:none;display:flex;justify-content:space-between;gap:16px}
+  .faq summary::-webkit-details-marker{display:none}
+  .faq summary::after{content:"+";color:var(--ink-faint);font-weight:400;font-size:22px;line-height:1}
+  .faq details[open] summary::after{content:"–"}
+  .faq p{color:var(--ink-soft);margin-top:14px;max-width:70ch;font-size:15.5px}
+  .faq code{font-family:var(--mono);font-size:13px;background:var(--bg-soft);padding:1px 6px;border-radius:5px}
+
+  /* ---------- footer ---------- */
+  footer{border-top:1px solid var(--line);padding:44px 0;color:var(--ink-faint);font-size:14.5px}
+  footer .wrap{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px}
+  footer .flinks{display:flex;gap:22px}
+  footer a:hover{color:var(--ink)}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <a class="brand" href="#"><span class="glyph">🎼</span> conductor</a>
+    <div class="navlinks">
+      <a href="#how">How it works</a>
+      <a href="#gate">The gate</a>
+      <a href="/swarms/">Swarms</a>
+      <a href="#cameras">Cameras</a>
+      <a href="#adapters">Adapters</a>
+      <a href="https://github.com/yksanjo/conductor">GitHub</a>
+      <a class="cta" href="#start">Add the MCP →</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ================= HERO ================= -->
+<header class="hero">
+  <div class="wrap">
+    <span class="eyebrow">🎼 Open-source MCP · zero dependencies</span>
+    <h1>Your agents run unattended — until something can't be undone</h1>
+    <p class="sub">Autopilot for a fleet of Claude Code agents. They fly the reversible work
+      unattended; a model-free gate stops the fleet before anything that <strong>deploys, sends,
+      deletes, or spends</strong> — and hands that one call to you. You can look away <em>because</em> it
+      can't ship without you.</p>
+    <!-- ============================================================
+         HERO CTA — forks on the reputation-vs-business decision.
+         Variant A (reputation) is rendered live below.
+         To switch to Variant B (open-core / waitlist), comment out
+         the A block and uncomment B. See marketing/NOTES.md.
+         ============================================================ -->
+    <!-- Variant A — reputation (max mindshare, no monetization) -->
+    <div class="hero-cta">
+      <a class="btn btn-primary" href="#start">Add the MCP →</a>
+      <a class="btn btn-ghost" href="https://github.com/yksanjo/conductor">Star on GitHub</a>
+    </div>
+    <!-- Variant B — business (open-core: free core + paid team cockpit)
+    <div class="hero-cta">
+      <a class="btn btn-primary" href="#start">Add the MCP — free →</a>
+      <a class="btn btn-ghost" href="#waitlist">Join the team-cockpit waitlist</a>
+    </div>
+    -->
+    <div class="hero-note">$ claude mcp add conductor --scope user -- node ~/conductor/mcp.js</div>
+
+    <!-- cockpit mock -->
+    <div class="stage">
+      <div class="term">
+        <div class="term-bar">
+          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+          <span class="term-title">🎼 conductor — 4 windows · last 10 min</span>
+        </div>
+        <div class="term-body">
+          <div class="grouphdr">WORKING NOW <span class="rule"></span></div>
+          <div class="scard work">
+            <div class="scard-top">
+              <span class="pip g"></span>
+              <span class="scard-title">Build SOAG agent trading grid with character art</span>
+              <span class="scard-meta">conv-fix · 4s ago</span>
+            </div>
+            <div class="scard-label">SOAG · Grid</div>
+            <div class="scard-action"><span class="arrow">›</span> Read: src/characters.js</div>
+          </div>
+          <div class="scard work">
+            <div class="scard-top">
+              <span class="pip g"></span>
+              <span class="scard-title">Refactor the settlement engine</span>
+              <span class="badge managed">managed</span>
+              <span class="scard-meta">x402-pact · 11s ago</span>
+            </div>
+            <div class="scard-label">x402 · Pact</div>
+            <div class="scard-action"><span class="arrow">›</span> Running tests — 21 passing</div>
+          </div>
+
+          <div class="grouphdr">WAITING ON YOU <span class="rule"></span></div>
+          <div class="scard gated">
+            <div class="scard-top">
+              <span class="pip r"></span>
+              <span class="scard-title">Deploy degenscreener to production?</span>
+              <span class="badge b-gate">gated</span>
+              <span class="scard-meta">survivors · 1m ago</span>
+            </div>
+            <div class="scard-label">DegenScreener</div>
+            <div class="scard-action"><span class="arrow">›</span> “Ready to run <span class="mono">npm run deploy</span> — confirm?”</div>
+            <div class="replybar">
+              <span class="chip go">Yes, deploy</span>
+              <span class="chip">No</span>
+              <span class="chip">Review first</span>
+            </div>
+          </div>
+
+          <div class="grouphdr">OPEN <span class="rule"></span></div>
+          <div class="scard open">
+            <div class="scard-top">
+              <span class="pip a"></span>
+              <span class="scard-title">Tech week NYC schedule planning</span>
+              <span class="scard-meta">main · 17h ago</span>
+            </div>
+            <div class="scard-label">Good Rooms</div>
+            <div class="scard-action"><span class="arrow">›</span> Done. Here's what I built…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</header>
+
+<!-- ================= STATS ================= -->
+<section class="stats">
+  <div class="wrap">
+    <div class="grid">
+      <div class="stat">
+        <div class="num">0<span class="accent">deps</span></div>
+        <div class="lab">Zero runtime dependencies. One Node file per surface, Node ≥18.</div>
+        <div class="src">No build step, no daemon, no database.</div>
+      </div>
+      <div class="stat">
+        <div class="num">1<span class="accent"> gate</span></div>
+        <div class="lab">One model-free stop before deploy · send · delete · spend. No model in the loop.</div>
+        <div class="src">Lives in <span class="mono">policy.js</span> — auditable, can't be crossed without you.</div>
+      </div>
+      <div class="stat">
+        <div class="num">∞<span class="accent"> agents</span></div>
+        <div class="lab">Fly a whole fleet hands-off — plus trading bots, MEV searchers, validators.</div>
+        <div class="src">Pluggable adapters on one supervisory core.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= PROBLEM ================= -->
+<section id="how">
+  <div class="wrap">
+    <div class="sec-eyebrow">The problem</div>
+    <h2>You can't leave an agent alone — so you babysit ten</h2>
+    <p class="lead">Agentic coding made it cheap to run five, ten, fifteen autonomous windows at once.
+      But each one can quietly <strong>deploy, send, delete, or spend</strong> the moment it decides to —
+      so you can't actually walk away. You sit there alt-tabbing, ready to yank the wheel, doing the one
+      job a fleet was supposed to free you from. The bottleneck isn't compute. It's that
+      <strong>you don't trust them to run unwatched</strong>.</p>
+
+    <div class="feat" style="margin-top:48px">
+      <div class="copy">
+        <div class="kicker">Autopilot, not hands-on</div>
+        <h3>Hand off the cruise; keep takeoff and landing</h3>
+        <p>Conductor lets the reversible work run end-to-end — edits, tests, commits, the back-and-forth
+          a window can answer for itself. It reads the live <code class="mono">.jsonl</code> trail each
+          Claude Code window already writes under <code class="mono">~/.claude/projects/</code>, so it
+          knows what every agent is doing without you watching.</p>
+        <ul>
+          <li><span class="tick">→</span> Auto-continues the safe, reversible steps so a window never stalls waiting on a routine "yes".</li>
+          <li><span class="tick">→</span> Floats the one window that actually needs you — wedged, done, or stopped at the gate — to the top.</li>
+          <li><span class="tick">→</span> Supervise by exception: <em>Working now / Waiting / Open / Idle</em>, problems first, one row per window.</li>
+        </ul>
+      </div>
+      <div class="stage" style="margin:0">
+        <div class="term">
+          <div class="term-bar">
+            <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+            <span class="term-title">~/.claude/projects/&lt;dir&gt;/&lt;session&gt;.jsonl</span>
+          </div>
+          <div class="codeblock" style="border-radius:0">
+<span class="c"># discover → liveness → parse → group → status → sort</span>
+<span class="k">$</span> conductor
+<span class="c"># one row per live window, problems first</span>
+
+  <span class="p">●</span> Build SOAG grid          conv-fix · 4s
+  <span class="p">●</span> Refactor settlement      x402   · 11s
+  <span style="color:#ff9b8a">●</span> Deploy to prod?          <span style="color:#ff9b8a">GATED</span> · 1m
+  <span style="color:#f4bf4f">●</span> Tech week planning       main   · 17h
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= GATE ================= -->
+<section id="gate">
+  <div class="wrap">
+    <div class="gate">
+      <div class="sec-eyebrow" style="color:#9db4ff">The safety model</div>
+      <h2>The autopilot flies the cruise. You own the landing.</h2>
+      <p class="lead">This is the whole product. The fleet runs reversible work on its own — but the moment a
+        window's next step would do something <em>irreversible</em>, Conductor physically stops and hands that
+        one decision back to you. Auto-continue is commodity; auto-continue plus a gate you can't cross without
+        a human thumb is the part you can trust. <strong>You can look away because it can't ship a deploy or
+        move funds without you.</strong></p>
+      <div class="gate-flow">
+        <div class="gate-card pass">
+          <div class="gh">✓ AUTO-CONTINUE</div>
+          <div class="q">“Tests pass — shall I update the README and commit?”</div>
+          <div class="verdict">reversible → sends “continue”, work keeps moving</div>
+        </div>
+        <div class="gate-card stop">
+          <div class="gh">⛔ GATED → HUMAN</div>
+          <div class="q">“Ready to deploy to prod / send the email / spend 0.4 SOL?”</div>
+          <div class="verdict">touches deploy·send·delete·spend → refuses, returns reason</div>
+        </div>
+      </div>
+      <p class="lead" style="margin-top:30px;font-size:16px;color:#8b857c">
+        The bias is to stop when unsure: a false gate costs one manual reply; a false pass can ship a bad
+        deploy or move real funds. The irreversibility gate lives in <code class="mono" style="background:#211e17;color:#bdb7ab;padding:1px 6px;border-radius:5px">policy.js</code> — auditable, no model in the loop.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= FEATURES ================= -->
+<section>
+  <div class="wrap">
+    <div class="sec-eyebrow">Three surfaces, one engine</div>
+    <h2>The cockpit is where you look when the fleet needs you</h2>
+    <p class="lead">The cockpit isn't the product — the bounded autonomy is. These are just the three ways to
+      keep one eye on a fleet that's running itself, and to land the calls only you can make.</p>
+    <div class="cards">
+      <div class="card">
+        <span class="ico">📊</span>
+        <h4>The cockpit</h4>
+        <p>Run <code>conductor up</code> for a live web view. Every window a card, color-coded by status,
+          auto-refreshing — so a glance tells you the fleet's still flying and nothing's hit the gate. When
+          one stops for a yes/no, it surfaces with one-tap <em>Yes / No / Continue / Review</em>.</p>
+      </div>
+      <div class="card">
+        <span class="ico">🔌</span>
+        <h4>The MCP server</h4>
+        <p>Conductor speaks the Model Context Protocol over stdio. An orchestrator agent calls
+          <code>list_sessions</code>, <code>whats_left</code>, <code>pending_questions</code> and the gated
+          control tools to run the fleet for you — and still can't push past the irreversibility gate.</p>
+      </div>
+      <div class="card">
+        <span class="ico">💬</span>
+        <h4>The skill</h4>
+        <p>Drop in the Claude Code skill and any window can tell you the fleet's state in plain English:
+          <em>“what's left across my windows?”</em> → a doing-now / done / waiting-on-you report per session.</p>
+      </div>
+      <div class="card">
+        <span class="ico">🎛️</span>
+        <h4>Opt-in control</h4>
+        <p>Launch managed windows through tmux, or <code>adopt</code> an existing one (forked, history
+          intact) so Conductor can drive it. Even then, control stops at the gate — and read-only stays read-only.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= ADAPTERS ================= -->
+<section id="adapters" class="divider">
+  <div class="wrap">
+    <div class="sec-eyebrow">The abstraction</div>
+    <h2>If it narrates itself to disk, Conductor can watch it</h2>
+    <p class="lead">Conductor is supervisory awareness over a fleet of semi-autonomous workers that already
+      emit an append-only trail. Claude Code is one adapter. Swap the adapter, keep the engine —
+      grouping, status, and all three surfaces come free.</p>
+    <div class="adtable">
+      <div class="adrow head"><div>Adapter</div><div>Reads</div><div>Control</div></div>
+      <div class="adrow">
+        <div class="nm">claude-code</div>
+        <div class="dsc">Your <code class="mono">~/.claude/projects</code> transcripts; liveness from a live <code class="mono">claude</code> process</div>
+        <div class="ctl">tmux send-keys (managed)</div>
+      </div>
+      <div class="adrow">
+        <div class="nm">fleet</div>
+        <div class="dsc">Trading-bot <code class="mono">events.jsonl</code>; derives wedged orders &amp; drawdown, session PnL</div>
+        <div class="ctl">pause · resume · flatten</div>
+      </div>
+      <div class="adrow">
+        <div class="nm">mev-searcher</div>
+        <div class="dsc">Searcher event logs; derives feed-dead, losing-every-race, bleeding-after-gas</div>
+        <div class="ctl">pause · kill · unwind (gated)</div>
+      </div>
+      <div class="adrow">
+        <div class="nm">validator-fleet</div>
+        <div class="dsc">The <em>chain itself</em> — one batched RPC poll learns delinquency, catchup, skip-rate</div>
+        <div class="ctl">observe-only by default</div>
+      </div>
+    </div>
+    <p class="lead" style="margin-top:26px;font-size:16px">
+      A domain fits when it has all four: many units with intent · a trail that already exists · a liveness
+      signal · supervise-by-exception status. Write one file at <code class="mono">adapters/&lt;name&gt;.js</code>
+      and every surface works with <code class="mono">--adapter &lt;name&gt;</code>.</p>
+  </div>
+</section>
+
+<!-- ================= SWARMS / FORMATIONS (V2) ================= -->
+<section id="swarms" class="divider">
+  <div class="wrap">
+    <div class="sec-eyebrow">Conductor V2 · swarms</div>
+    <h2>Design the formation, then fire it</h2>
+    <p class="lead">V1 watches windows you opened by hand. Its sibling
+      <a href="https://github.com/yksanjo/conductor2" style="color:var(--accent)">Conductor&nbsp;V2</a>
+      flips the order: pick a <strong>formation</strong>, set one purpose, press <strong>FIRE</strong> —
+      and a fleet of Claude Code windows launches into tmux and coordinates through two dumb, reliable
+      channels: a shared swarm directory for artifacts and a per-swarm <code class="mono">swarm-say</code>
+      helper for one-line handoffs. The formation decides who talks to whom and who starts.</p>
+
+    <div class="forms">
+      <div class="fcard">
+        <div class="ftop"><span class="femoji">🏛</span><h4>Hierarchical</h4></div>
+        <div class="fsub">Orchestrator → workers</div>
+        <pre>      ┌─ ORC ─┐
+  ┌───┼───┬───┼───┐
+  w1  w2  w3  w4</pre>
+        <p>One orchestrator decomposes the mission, delegates a task per worker, collects reports, and
+          synthesizes. Best when the work splits into independent chunks.</p>
+      </div>
+      <div class="fcard">
+        <div class="ftop"><span class="femoji">⛓</span><h4>Pipeline</h4></div>
+        <div class="fsub">Sequential stages</div>
+        <pre>s1 ─▶ s2 ─▶ s3 ─▶ s4
+ each stage hands
+ off to the next</pre>
+        <p>Stages run in order; each consumes the previous stage's output and hands off. Best for a
+          natural assembly line — recon → audit → verify → report.</p>
+      </div>
+      <div class="fcard">
+        <div class="ftop"><span class="femoji">🕸</span><h4>Mesh</h4></div>
+        <div class="fsub">Peer-to-peer</div>
+        <pre>  p1 ─── p2
+   │ ╲ ╱ │
+   │ ╱ ╲ │
+  p3 ─── p4</pre>
+        <p>Equal peers self-organize: each claims a distinct angle, works it, and broadcasts findings to
+          the rest. Best for breadth — sweep a space from several directions at once.</p>
+      </div>
+    </div>
+
+    <div class="v2bar">
+      <div class="vtext">
+        <strong style="color:var(--ink)">Fire it from any agent.</strong> The V2 MCP exposes
+        <code>list_formations</code>, <code>plan_swarm</code> (dry-run), <code>fire_swarm</code>,
+        <code>list_swarms</code>, and <code>stop_swarm</code> — plus presets for deep research, market-bot
+        sweeps, and web3 security reviews.
+      </div>
+      <a class="btn btn-primary" href="/swarms/">Explore swarms &amp; formations →</a>
+    </div>
+    <div class="codeblock" style="margin-top:18px;font-size:12.5px">
+<span class="c"># register the V2 swarm MCP</span>
+<span class="k">$</span> claude mcp add conductor2 --scope user -- node ~/conductor-v2/mcp.js
+
+<span class="c"># then, from any session:</span>
+<span class="k">›</span> plan a <span class="k">mesh</span> swarm of 4 to research x402, then fire it</div>
+  </div>
+</section>
+
+<!-- ================= CAMERA MONITOR ================= -->
+<section id="cameras" class="divider">
+  <div class="wrap">
+    <div class="sec-eyebrow">Conductor · cameras</div>
+    <h2>Point the same cockpit at a camera</h2>
+    <p class="lead">V1 watches your Claude windows; V2 fires swarms. The newest sibling,
+      <a href="https://github.com/yksanjo/conductor-camera-monitor" style="color:var(--accent)">Conductor&nbsp;Camera&nbsp;Monitor</a>,
+      watches <strong>cameras</strong>. Each RTSP feed becomes an <strong>AI detective</strong> — a Claude
+      session with a one-line mandate. It samples frames, Claude's <em>own</em> vision does the seeing
+      (no model to train — it watches anything you can describe), a motion gate keeps 24/7 watch cheap,
+      and every finding lands in a hash-chained alert ledger you can verify.</p>
+
+    <div class="forms">
+      <div class="fcard">
+        <div class="ftop"><span class="femoji">🔒</span><h4>Security</h4></div>
+        <div class="fsub">front door · after dark</div>
+        <pre>watch front_door:
+ alert when a
+ person appears
+ after 10pm</pre>
+        <p>A person enters frame at night → <code class="mono">alert</code>. The same person still standing
+          there next frame stays quiet — dedup fires only on change.</p>
+      </div>
+      <div class="fcard">
+        <div class="ftop"><span class="femoji">🌱</span><h4>Farming</h4></div>
+        <div class="fsub">greenhouse · crop health</div>
+        <pre>watch greenhouse:
+ warn when a
+ crop bed looks
+ dry or wilted</pre>
+        <p>No ML model, no labels. If you can describe what "dry" looks like, the detective can flag it —
+          and tell you which bed, with the frame as evidence.</p>
+      </div>
+      <div class="fcard">
+        <div class="ftop"><span class="femoji">🏭</span><h4>Production</h4></div>
+        <div class="fsub">packing line · uptime</div>
+        <pre>watch line_1:
+ critical if the
+ conveyor is empty
+ for over 30s</pre>
+        <p>Object counts, no-go zones, defects, stoppages — any rule that's easier to <em>say</em> than to
+          train. Escalates honestly: info → warn → alert → critical.</p>
+      </div>
+    </div>
+
+    <div class="v2bar">
+      <div class="vtext">
+        <strong style="color:var(--ink)">One prompt onboards a detective.</strong> The MCP exposes
+        <code>add_feed</code>, <code>grab_frame</code> (returns the frame as an image to look at + a motion
+        score), <code>emit_alert</code> (hash-chained, auto-deduped), and <code>recent_alerts</code> —
+        plus a live web cockpit: a wall of camera tiles with a color-coded alert stream.
+      </div>
+      <a class="btn btn-primary" href="https://github.com/yksanjo/conductor-camera-monitor">Get Camera Monitor →</a>
+    </div>
+    <div class="codeblock" style="margin-top:18px;font-size:12.5px">
+<span class="c"># register the camera MCP, then add a feed</span>
+<span class="k">$</span> claude mcp add camera-monitor -- node ~/conductor-camera-monitor/bin/ccm.mjs serve
+<span class="k">$</span> ccm add front_door <span class="p">"rtsp://…"</span> --mandate <span class="p">"alert when a person appears"</span>
+
+<span class="c"># onboard the detective (prints the one prompt to paste) + open the cockpit</span>
+<span class="k">$</span> ccm detective front_door
+<span class="k">$</span> ccm dashboard          <span class="c"># → localhost:4055</span></div>
+  </div>
+</section>
+
+<!-- ================= SECURITY ================= -->
+<section class="divider">
+  <div class="wrap">
+    <div class="feat flip">
+      <div class="copy">
+        <div class="kicker">Local-first by design</div>
+        <h3>It only reads your own machine</h3>
+        <p>Watching is read-only observation of trails that already exist — nothing leaves your laptop.
+          The cockpit binds to <code class="mono">127.0.0.1</code> only.</p>
+        <ul>
+          <li><span class="tick">✓</span> Reads <em>your own</em> <code class="mono">~/.claude</code> — never another user's transcripts.</li>
+          <li><span class="tick">✓</span> State-changing requests require a local origin + CSRF header.</li>
+          <li><span class="tick">✓</span> Destructive control (flatten / broadcast / close) needs a confirm token.</li>
+          <li><span class="tick">✓</span> No destructive broadcast — ever. The desk-wide button is always a safe stop.</li>
+        </ul>
+      </div>
+      <div class="stage" style="margin:0">
+        <div class="term">
+          <div class="term-bar">
+            <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+            <span class="term-title">honest limits — v1</span>
+          </div>
+          <div class="term-body" style="color:var(--ink-soft)">
+            <div style="margin-bottom:12px"><strong style="color:var(--ink)">Control is managed-only.</strong> Plain terminal windows you opened yourself stay read-only — there's no reliable way to inject input into them.</div>
+            <div style="margin-bottom:12px"><strong style="color:var(--ink)">“What's left” is inferred</strong> from the transcript, not a real todo list. Best-effort, honestly labelled.</div>
+            <div><strong style="color:var(--ink)">“Live” = recently touched.</strong> Per-row time always shows true last activity.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= GET STARTED ================= -->
+<section id="start" class="start">
+  <div class="wrap">
+    <div class="sec-eyebrow">Get started</div>
+    <!-- ============================================================
+         GET STARTED — heading + first card fork on reputation vs business.
+         Variant A (reputation) rendered live. For Variant B (open-core),
+         see the commented block at the end of this section and NOTES.md.
+         ============================================================ -->
+    <h2>Two ways to run Conductor today</h2>
+    <div class="grid">
+      <div class="startcard">
+        <div class="tag">Free · open source</div>
+        <h4>Add the MCP server</h4>
+        <p>Wire Conductor into Claude Code at user scope and it's available in every session. Run an
+          orchestrator that flies the fleet — triaging windows, continuing the reversible work, and stopping
+          dead at the gate on anything that deploys, sends, deletes, or spends.</p>
+        <div class="codeblock" style="margin-bottom:20px;font-size:12.5px">
+<span class="c"># clone once</span>
+<span class="k">$</span> git clone https://github.com/yksanjo/conductor ~/conductor
+
+<span class="c"># register the MCP (user scope = everywhere)</span>
+<span class="k">$</span> claude mcp add conductor --scope user \
+      -- node ~/conductor/mcp.js</div>
+        <a class="btn btn-primary" href="https://github.com/yksanjo/conductor">Get the MCP →</a>
+      </div>
+      <div class="startcard">
+        <div class="tag soon">Visual · 1 command</div>
+        <h4>Launch the cockpit</h4>
+        <p>Prefer to watch? <code class="mono">npm link</code> puts a global <code class="mono">conductor</code>
+          on your PATH — no build, no dependencies — then one command opens the live web dashboard in your
+          browser, grouped by status and refreshing every 4s.</p>
+        <div class="codeblock" style="margin-bottom:20px;font-size:12.5px">
+<span class="k">$</span> cd ~/conductor && npm link
+<span class="k">$</span> conductor            <span class="c"># glance: table</span>
+<span class="k">$</span> conductor up         <span class="c"># the visual cockpit</span>
+<span class="k">$</span> conductor say soag yes  <span class="c"># reply</span></div>
+        <a class="btn btn-ghost" href="https://github.com/yksanjo/conductor#usage">Read the docs →</a>
+      </div>
+    </div>
+    <!-- Variant B — open-core (business). Drop this third card in alongside the two above,
+         switch the heading to "Three ways to run Conductor" and uncomment the hero B CTA.
+    <div id="waitlist" class="startcard" style="margin-top:22px">
+      <div class="tag soon">Team · paid (early access)</div>
+      <h4>Run a fleet across your team</h4>
+      <p>Everything in the free core, plus a shared team cockpit, role-based approvals on the
+        irreversibility gate, and a full audit log of every gated call and who answered it. For teams who
+        need the trust boundary to be governed, not just personal.</p>
+      <a class="btn btn-primary" href="#">Join the waitlist →</a>
+    </div>
+    -->
+  </div>
+</section>
+
+<!-- ================= FAQ ================= -->
+<section class="faq">
+  <div class="wrap">
+    <div class="sec-eyebrow">FAQ</div>
+    <h2 style="margin-bottom:18px">Frequently asked questions</h2>
+    <details open>
+      <summary>Isn't this just a nicer view of my terminals?</summary>
+      <p>No — a tidy dashboard is table stakes (tmux already gives you that). The point is that you can
+        <em>leave</em>. The fleet runs the reversible work unattended, and a hard gate stops it before
+        anything that can't be undone. The cockpit is just where you look when one window finally needs your
+        call. You're buying the ability to look away, not a prettier grid.</p>
+    </details>
+    <details>
+      <summary>Does it need me to instrument my agents?</summary>
+      <p>No. It reads the <code>.jsonl</code> trail Claude Code already writes under
+        <code>~/.claude/projects/</code>. Zero instrumentation, zero new infrastructure, zero dependencies.
+        Other workers (bots, validators) just need a small adapter file.</p>
+    </details>
+    <details>
+      <summary>Can it ship something on its own?</summary>
+      <p>Not anything irreversible. Ordinary work auto-continues, but the moment a window's question — or a
+        proposed reply — touches <strong>deploy, send, delete, or spend</strong>, the gate in
+        <code>policy.js</code> refuses and returns the reason so a human decides. Approving an irreversible
+        action is always your call.</p>
+    </details>
+    <details>
+      <summary>Is my code or my transcripts sent anywhere?</summary>
+      <p>No. Everything is local-first. The cockpit binds to <code>127.0.0.1</code>, reads only your own
+        <code>~/.claude</code>, and state-changing requests require a local origin plus a CSRF header.
+        Run it for yourself, not as a service.</p>
+    </details>
+    <details>
+      <summary>What about windows I opened by hand?</summary>
+      <p>Watched, always. Controlled, only if you <code>adopt</code> them — Conductor forks the session into
+        a managed tmux window (full history intact) so it can inject replies. Plain terminals the OS won't
+        let anything type into stay read-only, by design.</p>
+    </details>
+  </div>
+</section>
+
+<!-- ================= FOOTER ================= -->
+<footer>
+  <div class="wrap">
+    <div>🎼 conductor · fly the fleet hands-off, until it needs you · MIT</div>
+    <div class="flinks">
+      <a href="https://github.com/yksanjo/conductor">GitHub</a>
+      <a href="https://github.com/yksanjo/conductor2">Conductor V2</a>
+      <a href="https://github.com/yksanjo/conductor-camera-monitor">Camera Monitor</a>
+      <a href="https://github.com/yksanjo/conductor#honest-limits-v1">Honest limits</a>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

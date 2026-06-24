@@ -1,0 +1,69 @@
+{
+  "name": "@yksanjo/codex-conductor",
+  "version": "0.1.0",
+  "publishConfig": {
+    "access": "public"
+  },
+  "description": "Codex-first cockpit and MCP server for local Codex sessions: read ~/.codex transcripts, group work by status, and drive managed tmux sessions behind an irreversibility gate.",
+  "bin": {
+    "codex-conductor": "cli.js",
+    "codex-cockpit": "server.js",
+    "codex-conductor-mcp": "mcp.js",
+    "codex-conductor-seat": "seat-server.js",
+    "codex-conductor-seat-mcp": "seat-mcp.js"
+  },
+  "scripts": {
+    "start": "node scan.js",
+    "serve": "node server.js",
+    "mcp": "node mcp.js",
+    "seat": "node seat-server.js",
+    "seat-mcp": "node seat-mcp.js",
+    "test": "node codex.test.js && CONDUCTOR_DEFAULT_ADAPTER=claude-code node test.js && node policy.test.js && node fleet.test.js && node adapters/mev-searcher.test.js && node adapters/validator-fleet.test.js && node adapters/sales.test.js && CONDUCTOR_DEFAULT_ADAPTER=claude-code node mcp.test.js && CONDUCTOR_DEFAULT_ADAPTER=claude-code node manage.test.js && CONDUCTOR_DEFAULT_ADAPTER=claude-code node server.test.js && node server.fleet.test.js && CONDUCTOR_DEFAULT_ADAPTER=claude-code node seat.test.js && CONDUCTOR_DEFAULT_ADAPTER=claude-code node seat.e2e.test.js"
+  },
+  "files": [
+    "cli.js",
+    "scan.js",
+    "server.js",
+    "ui.html",
+    "mcp.js",
+    "config.js",
+    "seat.js",
+    "drive.js",
+    "seat-server.js",
+    "seat-mcp.js",
+    "engine.js",
+    "lib.js",
+    "manage.js",
+    "policy.js",
+    "util.js",
+    "adapters/claude-code.js",
+    "adapters/codex-code.js",
+    "adapters/fleet.js",
+    "adapters/mev-searcher.js",
+    "adapters/validator-fleet.js",
+    "adapters/sales.js",
+    "adapters/_filetrail.js",
+    "skill/SKILL.md",
+    "docs/cockpit.png",
+    "docs/spec.png",
+    "docs/orchestrator-prompt.md",
+    "docs/manual.html",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "codex",
+    "codex-cli",
+    "codex-code",
+    "cli",
+    "agents",
+    "orchestration",
+    "dashboard"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {}
+}

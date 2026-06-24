@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  :root{
+    --bg:#08080b; --panel:#101016; --panel2:#15151f; --line:rgba(255,255,255,.08); --line2:rgba(255,255,255,.16);
+    --txt:#f3f3f8; --mut:#9696ab; --dim:#5c5c72;
+    --active:#3ee07f; --open:#46d8c6; --recent:#f5b13f; --accent:#a974ff; --accent2:#ff5cc8;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,monospace;
+    --sans:ui-sans-serif,-apple-system,"SF Pro Text",Inter,system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{width:1240px;background:var(--bg);color:var(--txt);font-family:var(--sans);
+    background-image:radial-gradient(900px 460px at 85% -6%,rgba(169,116,255,.13),transparent 70%),
+      radial-gradient(760px 420px at -4% 106%,rgba(255,92,200,.08),transparent 70%);
+    padding:46px 52px 40px;}
+  .head{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:8px}
+  .wm{font-size:42px;font-weight:720;letter-spacing:.5px}
+  .wm .g{background:linear-gradient(92deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .tag{font-size:16px;color:var(--mut);margin-top:8px}
+  .right{text-align:right;color:var(--dim);font-family:var(--mono);font-size:12.5px;line-height:1.7}
+  .right b{color:var(--accent)}
+  .one{font-size:18px;color:var(--txt);margin:18px 0 26px;line-height:1.5;max-width:1050px}
+  .one b{color:var(--open)}
+  .layer{background:linear-gradient(165deg,rgba(255,255,255,.035),rgba(255,255,255,.012));border:1px solid var(--line);border-radius:18px;padding:18px 20px;position:relative}
+  .ltitle{font-size:11px;font-weight:750;letter-spacing:1.6px;text-transform:uppercase;color:var(--mut);margin-bottom:13px;display:flex;align-items:center;gap:9px}
+  .ltitle .d{width:8px;height:8px;border-radius:50%;box-shadow:0 0 8px currentColor}
+  .row{display:flex;gap:13px}
+  .col{flex:1}
+  .chip{display:flex;flex-direction:column;gap:4px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:13px 15px}
+  .chip .n{font-size:14.5px;font-weight:650}
+  .chip .s{font-size:12px;color:var(--mut);line-height:1.4}
+  .chip .k{font-family:var(--mono);font-size:11px;color:var(--dim)}
+  .pill{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;padding:2px 8px;border-radius:999px;margin-bottom:7px}
+  .p-read{color:var(--open);background:rgba(70,216,198,.12);border:1px solid rgba(70,216,198,.3)}
+  .p-ctrl{color:var(--accent);background:rgba(169,116,255,.12);border:1px solid rgba(169,116,255,.32)}
+  .flow{display:flex;align-items:center;justify-content:center;gap:14px;margin:11px 0;color:var(--dim);font-family:var(--mono);font-size:12px}
+  .flow .ar{font-size:17px}
+  .flow .read{color:var(--open)} .flow .ctrl{color:var(--accent)}
+  .surfaces .chip{align-items:flex-start}
+  .tag2{font-family:var(--mono);font-size:11px;color:var(--accent);margin-top:6px}
+  .foot{display:flex;gap:26px;margin-top:24px;font-size:13px;color:var(--mut);align-items:center;flex-wrap:wrap}
+  .foot b{color:var(--txt)} .foot .sep{color:var(--dim)}
+  .legend{display:flex;gap:18px;font-size:11.5px;color:var(--mut)}
+  .legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle}
+</style>
+</head>
+<body>
+  <div class="head">
+    <div>
+      <div class="wm">🎼 <span class="g">Conductor</span></div>
+      <div class="tag">Situational awareness <span style="color:var(--dim)">+</span> control across your live Claude Code windows.</div>
+    </div>
+    <div class="right">github.com/yksanjo/<b>conductor</b><br>zero dependencies · MIT<br>51 tests · read-only core</div>
+  </div>
+
+  <div class="one">You have 10 terminals running Claude Code and no idea what each is doing. Open <b>one</b> window —
+    or the cockpit — and Conductor shows what every other window is working on, what's done, and what's left… then lets you <b>reply to them</b>.</div>
+
+  <!-- Layer 1: windows -->
+  <div class="layer">
+    <div class="ltitle"><span class="d" style="color:var(--active)"></span>Your Claude Code windows</div>
+    <div class="row">
+      <div class="col chip"><div class="n">🟢 SOAG · Grid</div><div class="s">building the trade desk</div></div>
+      <div class="col chip"><div class="n">🟢 Research</div><div class="s">comparing pricing</div></div>
+      <div class="col chip"><div class="n">🟦 Fix bug</div><div class="s">open · idle 20m</div></div>
+      <div class="col chip"><div class="n">🟦 Deploy</div><div class="s">open · idle 1h</div></div>
+      <div class="col chip" style="justify-content:center;color:var(--dim);font-family:var(--mono);font-size:12px;background:none;border:1px dashed var(--line)">…each one writes a live<br>transcript + runs as a process</div>
+    </div>
+  </div>
+
+  <div class="flow">
+    <span class="read">▲ READ &nbsp;~/.claude/projects/**/*.jsonl &nbsp;+&nbsp; live <span style="font-family:var(--mono)">claude</span> processes</span>
+    <span class="ar">·</span>
+    <span class="ctrl">▼ CONTROL &nbsp;tmux send-keys → managed windows</span>
+  </div>
+
+  <!-- Layer 2: engine -->
+  <div class="layer">
+    <div class="ltitle"><span class="d" style="color:var(--accent)"></span>Conductor engine &nbsp;<span style="color:var(--dim);font-family:var(--mono);letter-spacing:0">lib.js · 0 deps</span></div>
+    <div class="row">
+      <div class="col chip"><span class="pill p-read">discover</span><div class="s">scan transcripts, gate by mtime, drop subagent threads</div></div>
+      <div class="col chip"><span class="pill p-read">liveness</span><div class="s">a window is "open" if a live <span class="k">claude</span> process owns it — not just recent file writes</div></div>
+      <div class="col chip"><span class="pill p-read">parse</span><div class="s">plain-language title, goal, last action, status (working / open / recent / idle)</div></div>
+    </div>
+  </div>
+
+  <!-- Layer 3: surfaces -->
+  <div class="layer" style="margin-top:14px">
+    <div class="ltitle"><span class="d" style="color:var(--open)"></span>Three surfaces · same engine</div>
+    <div class="row surfaces">
+      <div class="col chip"><div class="n">⌨ CLI</div><div class="s">boxed, sectioned table at a glance</div><div class="tag2">conductor</div></div>
+      <div class="col chip"><div class="n">🖥 Web cockpit</div><div class="s">live cards, click for detail, reply buttons</div><div class="tag2">conductor up · :7591</div></div>
+      <div class="col chip"><div class="n">🔌 MCP server</div><div class="s">any agent can ask "what are my windows doing?"</div><div class="tag2">list · summarize · whats_left</div></div>
+    </div>
+  </div>
+
+  <!-- Layer 4: control -->
+  <div class="layer" style="margin-top:14px">
+    <div class="ltitle"><span class="d" style="color:var(--accent2)"></span>Control plane &nbsp;<span style="color:var(--dim);font-family:var(--mono);letter-spacing:0">tmux · managed windows only</span></div>
+    <div class="row">
+      <div class="col chip"><span class="pill p-ctrl">run</span><div class="s">launch a window born-managed (auto-trusts)</div></div>
+      <div class="col chip"><span class="pill p-ctrl">adopt</span><div class="s">fork an existing session into a managed one</div></div>
+      <div class="col chip"><span class="pill p-ctrl">say</span><div class="s">quick reply: yes / continue / review…</div></div>
+      <div class="col chip"><span class="pill p-ctrl">broadcast</span><div class="s">prompt ALL managed windows at once</div></div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <div class="legend">
+      <span><i style="background:var(--open)"></i>read-only (any window)</span>
+      <span><i style="background:var(--accent)"></i>control (windows you launch / adopt)</span>
+    </div>
+    <span class="sep">|</span>
+    <span><b>Honest by design:</b> a plain terminal can't take injected input — control works on windows Conductor launches into tmux.</span>
+  </div>
+</body>
+</html>

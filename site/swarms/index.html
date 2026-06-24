@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Swarms & formations — Conductor V2</title>
+<meta name="description" content="Conductor V2: pick a formation (hierarchical, pipeline, mesh), set one purpose, FIRE — a fleet of Claude Code windows launches into tmux and coordinates through files and one-line handoffs. Drive it from any agent via the V2 swarm MCP." />
+<meta property="og:title" content="Swarms & formations — Conductor V2" />
+<meta property="og:description" content="Design the formation, then fire it. A fleet of Claude Code windows that coordinate over tmux — planned and fired from any MCP agent." />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%F0%9F%95%B8</text></svg>" />
+<style>
+  :root{
+    --bg:#0f0e0c; --bg-soft:#17150f; --ink:#f4f1ea; --ink-soft:#b3ada1; --ink-faint:#7d776c;
+    --line:#2a2720; --line-strong:#3a362d; --accent:#a5b4fc; --accent-strong:#6366f1;
+    --accent-soft:#1c1b33; --green:#5bc46d; --green-bg:#15271a; --amber:#f4bf4f; --amber-bg:#2a2110;
+    --red:#ff6b5e; --red-bg:#2c1513; --card:#1a1812;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 12px 34px rgba(0,0,0,.35); --radius:14px;
+    --mono:"SF Mono",ui-monospace,"JetBrains Mono","Menlo",monospace;
+    --sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55;-webkit-font-smoothing:antialiased;font-size:17px}
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 28px}
+  .accent{color:var(--accent)}
+  .mono{font-family:var(--mono)}
+
+  nav{position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:saturate(150%) blur(10px);border-bottom:1px solid var(--line)}
+  nav .wrap{display:flex;align-items:center;justify-content:space-between;height:62px}
+  .brand{display:flex;align-items:center;gap:9px;font-weight:600;font-size:18px;letter-spacing:-.01em}
+  .brand .glyph{font-size:20px}
+  .navlinks{display:flex;align-items:center;gap:26px;font-size:15px;color:var(--ink-soft)}
+  .navlinks a:hover{color:var(--ink)}
+  .navlinks .cta{color:var(--accent);font-weight:600}
+  @media(max-width:720px){.navlinks a:not(.cta){display:none}}
+
+  .btn{display:inline-flex;align-items:center;gap:8px;padding:12px 20px;border-radius:10px;font-weight:600;font-size:15.5px;border:1px solid transparent;transition:.15s ease;cursor:pointer;white-space:nowrap}
+  .btn-primary{background:var(--accent-strong);color:#fff;box-shadow:0 1px 2px rgba(0,0,0,.4)}
+  .btn-primary:hover{background:#4f46e5;transform:translateY(-1px)}
+  .btn-ghost{background:var(--card);color:var(--ink);border-color:var(--line-strong)}
+  .btn-ghost:hover{border-color:var(--ink-faint);transform:translateY(-1px)}
+
+  header.hero{padding:78px 0 44px;text-align:center}
+  .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:13.5px;font-weight:600;letter-spacing:.02em;color:var(--accent);background:var(--accent-soft);padding:6px 13px;border-radius:999px;margin-bottom:24px}
+  h1{font-size:clamp(34px,6vw,56px);line-height:1.05;letter-spacing:-.028em;font-weight:700;max-width:16ch;margin:0 auto 20px}
+  .sub{font-size:clamp(17px,2.2vw,20px);color:var(--ink-soft);max-width:60ch;margin:0 auto 32px}
+  .hero-cta{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+  .hero-note{margin-top:18px;font-size:13.5px;color:var(--ink-faint);font-family:var(--mono)}
+
+  /* swarm-fired mock */
+  .stage{margin:50px auto 0;max-width:900px}
+  .term{background:#131109;border:1px solid var(--line-strong);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;text-align:left}
+  .term-bar{display:flex;align-items:center;gap:7px;padding:12px 16px;background:var(--bg-soft);border-bottom:1px solid var(--line)}
+  .dot{width:11px;height:11px;border-radius:50%}
+  .dot.r{background:#ef6b62}.dot.y{background:#f4bf4f}.dot.g{background:#5bc46d}
+  .term-title{margin-left:10px;font-family:var(--mono);font-size:12.5px;color:var(--ink-faint)}
+  .panes{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line)}
+  @media(max-width:640px){.panes{grid-template-columns:1fr}}
+  .pane{background:#131109;padding:14px 16px;font-family:var(--mono);font-size:12px;line-height:1.5;min-height:120px}
+  .pane .ph{display:flex;align-items:center;gap:7px;color:var(--ink);font-weight:600;margin-bottom:9px;font-size:11.5px;letter-spacing:.03em}
+  .pane .pip{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px var(--green-bg);flex:none}
+  .pane .role{color:var(--accent)}
+  .pane .ln{color:var(--ink-soft);margin-bottom:3px}
+  .pane .ln .a{color:var(--ink-faint)}
+  .pane .say{color:var(--amber)}
+
+  section{padding:64px 0}
+  .divider{border-top:1px solid var(--line)}
+  .sec-eyebrow{font-size:13.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);margin-bottom:14px}
+  h2{font-size:clamp(27px,4vw,38px);letter-spacing:-.022em;line-height:1.1;font-weight:700;max-width:22ch}
+  .lead{font-size:18.5px;color:var(--ink-soft);max-width:64ch;margin-top:18px}
+
+  /* formations */
+  .forms{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:40px}
+  @media(max-width:840px){.forms{grid-template-columns:1fr}}
+  .fcard{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:24px;display:flex;flex-direction:column}
+  .fcard:hover{border-color:var(--line-strong)}
+  .fcard .ftop{display:flex;align-items:center;gap:9px;margin-bottom:3px}
+  .fcard .femoji{font-size:20px}
+  .fcard h3{font-size:18px;letter-spacing:-.01em}
+  .fcard .fsub{color:var(--ink-faint);font-size:12.5px;font-weight:600;letter-spacing:.02em;margin-bottom:16px}
+  .fcard pre{font-family:var(--mono);font-size:12px;line-height:1.45;color:var(--accent);background:#0c0b08;border:1px solid var(--line);border-radius:9px;padding:14px;margin-bottom:14px;white-space:pre;overflow-x:auto}
+  .fcard p{color:var(--ink-soft);font-size:13.5px;margin-bottom:12px}
+  .fcard .when{margin-top:auto;font-size:12.5px;color:var(--ink-faint);border-top:1px dashed var(--line);padding-top:11px}
+  .fcard .when b{color:var(--ink-soft);font-weight:600}
+
+  /* coordination two-col */
+  .feat{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:center;margin-top:8px}
+  @media(max-width:840px){.feat{grid-template-columns:1fr;gap:28px}}
+  .feat h3{font-size:24px;letter-spacing:-.02em;margin-bottom:10px}
+  .feat ul{list-style:none;display:flex;flex-direction:column;gap:12px;margin-top:6px}
+  .feat li{display:flex;gap:11px;align-items:flex-start;font-size:15.5px;color:var(--ink-soft)}
+  .feat li .tick{color:var(--green);font-weight:700;flex:none;margin-top:1px}
+  .feat code{font-family:var(--mono);font-size:13px;background:var(--bg-soft);border:1px solid var(--line);padding:1px 6px;border-radius:5px;color:var(--ink)}
+
+  /* presets */
+  .presets{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:38px}
+  @media(max-width:840px){.presets{grid-template-columns:1fr}}
+  .pcard{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:24px}
+  .pcard:hover{border-color:var(--line-strong)}
+  .pcard .pt{display:flex;align-items:center;gap:9px;margin-bottom:4px}
+  .pcard .pe{font-size:20px}
+  .pcard h4{font-size:17px;letter-spacing:-.01em}
+  .pcard .pmeta{font-family:var(--mono);font-size:11.5px;color:var(--accent);margin-bottom:12px}
+  .pcard p{color:var(--ink-soft);font-size:13.5px}
+
+  /* tools table */
+  .tt{margin-top:38px;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:var(--card)}
+  .ttrow{display:grid;grid-template-columns:1fr 2.2fr .9fr;gap:18px;padding:16px 22px;border-bottom:1px solid var(--line);align-items:center;font-size:14.5px}
+  .ttrow:last-child{border-bottom:0}
+  .ttrow.head{background:var(--bg-soft);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-faint);font-weight:700}
+  .ttrow .nm{font-family:var(--mono);font-weight:600;color:var(--accent);font-size:13.5px}
+  .ttrow .ds{color:var(--ink-soft)}
+  .kind{font-family:var(--sans);font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:3px 8px;border-radius:5px;display:inline-block;white-space:nowrap}
+  .kind.safe{background:var(--green-bg);color:var(--green)}
+  .kind.act{background:var(--red-bg);color:var(--red)}
+  @media(max-width:720px){.ttrow{grid-template-columns:1fr;gap:6px}.ttrow.head{display:none}.ttrow .nm{font-size:15px}}
+
+  .codeblock{background:#0c0b08;border:1px solid var(--line);color:#e9e5db;border-radius:12px;padding:20px 22px;font-family:var(--mono);font-size:13.5px;line-height:1.7;overflow-x:auto;text-align:left}
+  .codeblock .c{color:#7d776c}.codeblock .k{color:#9db4ff}.codeblock .p{color:#7bd88f}
+
+  .cta-band{background:linear-gradient(180deg,#15130d,#0c0b08);border:1px solid var(--line-strong);border-radius:18px;padding:44px;text-align:center;margin-top:8px}
+  .cta-band h2{margin:0 auto 14px;max-width:20ch}
+  .cta-band .lead{margin:0 auto 26px}
+
+  footer{border-top:1px solid var(--line);padding:44px 0;color:var(--ink-faint);font-size:14.5px}
+  footer .wrap{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px}
+  footer .flinks{display:flex;gap:22px}
+  footer a:hover{color:var(--ink)}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <a class="brand" href="/"><span class="glyph">🎼</span> conductor</a>
+    <div class="navlinks">
+      <a href="/#how">Watch (V1)</a>
+      <a href="/swarms/" class="accent">Swarms (V2)</a>
+      <a href="https://github.com/yksanjo/conductor2">GitHub</a>
+      <a class="cta" href="#start">Add the MCP →</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ============ HERO ============ -->
+<header class="hero">
+  <div class="wrap">
+    <span class="eyebrow">🕸 Conductor V2 · fire the fleet</span>
+    <h1>Design the formation. Then fire it.</h1>
+    <p class="sub">Conductor V1 watches windows you opened by hand. V2 flips the order: pick a formation,
+      set one purpose, press <strong>FIRE</strong> — and a fleet of Claude Code windows launches into
+      tmux and coordinates on its own.</p>
+    <div class="hero-cta">
+      <a class="btn btn-primary" href="#start">Add the swarm MCP →</a>
+      <a class="btn btn-ghost" href="#formations">See the formations</a>
+    </div>
+    <div class="hero-note">$ claude mcp add conductor2 --scope user -- node ~/conductor-v2/mcp.js</div>
+
+    <!-- fired-swarm mock -->
+    <div class="stage">
+      <div class="term">
+        <div class="term-bar">
+          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+          <span class="term-title">tmux: conductor2 — swarm “x402-research” · mesh · 4 peers · fable-5</span>
+        </div>
+        <div class="panes">
+          <div class="pane">
+            <div class="ph"><span class="pip"></span> p1 <span class="role">· landscape ← initiator</span></div>
+            <div class="ln"><span class="a">›</span> Wrote out/landscape.md (11 players)</div>
+            <div class="say">→ say p2 "see out/landscape.md, your turn on evidence"</div>
+          </div>
+          <div class="pane">
+            <div class="ph"><span class="pip"></span> p2 <span class="role">· evidence</span></div>
+            <div class="ln"><span class="a">›</span> Reading out/landscape.md…</div>
+            <div class="ln"><span class="a">›</span> Pulling primary sources (3 repos, 2 PRs)</div>
+          </div>
+          <div class="pane">
+            <div class="ph"><span class="pip"></span> p3 <span class="role">· red-team</span></div>
+            <div class="ln"><span class="a">›</span> Hunting counter-evidence</div>
+            <div class="say">→ say p1 "the 93% claim is unsourced — flagging"</div>
+          </div>
+          <div class="pane">
+            <div class="ph"><span class="pip"></span> p4 <span class="role">· numbers</span></div>
+            <div class="ln"><span class="a">›</span> out/figures.csv — volumes + pricing</div>
+            <div class="ln"><span class="a">›</span> 8 figures, each with a source URL</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ============ FORMATIONS ============ -->
+<section id="formations">
+  <div class="wrap">
+    <div class="sec-eyebrow">The formations</div>
+    <h2>Three shapes. The formation decides who talks to whom — and who starts.</h2>
+    <div class="forms">
+      <div class="fcard">
+        <div class="ftop"><span class="femoji">🏛</span><h3>Hierarchical</h3></div>
+        <div class="fsub">Orchestrator → workers</div>
+        <pre>      ┌─ ORC ─┐
+  ┌───┼───┬───┼───┐
+  w1  w2  w3  w4</pre>
+        <p>One orchestrator decomposes the mission, delegates a single task per worker, collects their
+          reports, and synthesizes the final result.</p>
+        <div class="when"><b>Best when</b> the mission splits into independent chunks.</div>
+      </div>
+      <div class="fcard">
+        <div class="ftop"><span class="femoji">⛓</span><h3>Pipeline</h3></div>
+        <div class="fsub">Sequential stages</div>
+        <pre>s1 ─▶ s2 ─▶ s3 ─▶ s4
+ each stage hands
+ off to the next</pre>
+        <p>Stages run in order; each consumes the previous stage's output and hands off to the next.
+          Initiator is the first stage.</p>
+        <div class="when"><b>Best when</b> there's a natural assembly line — recon → audit → verify → report.</div>
+      </div>
+      <div class="fcard">
+        <div class="ftop"><span class="femoji">🕸</span><h3>Mesh</h3></div>
+        <div class="fsub">Peer-to-peer</div>
+        <pre>  p1 ─── p2
+   │ ╲ ╱ │
+   │ ╱ ╲ │
+  p3 ─── p4</pre>
+        <p>Equal peers self-organize: each claims a distinct angle, works it, and broadcasts findings to
+          the others. Peer 1 doubles as scribe.</p>
+        <div class="when"><b>Best when</b> you want breadth — sweep a space from several directions at once.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ COORDINATION ============ -->
+<section class="divider">
+  <div class="wrap">
+    <div class="feat">
+      <div class="copy">
+        <div class="sec-eyebrow">How they coordinate</div>
+        <h3>Two dumb, reliable channels</h3>
+        <p class="lead" style="margin-top:0">No message bus, no new infrastructure. A swarm coordinates the
+          way people do: shared files and short pings.</p>
+        <ul>
+          <li><span class="tick">→</span> <b style="color:var(--ink)">Files</b> — a shared swarm directory <code>~/.conductor2/swarms/&lt;name&gt;/</code> holds the mission, <code>out/</code> artifacts, and <code>notes/</code>. Files are the source of truth.</li>
+          <li><span class="tick">→</span> <b style="color:var(--ink)">Messages</b> — <code>swarm-say &lt;window&gt; "&lt;one line&gt;"</code> for handoffs and pings; anything longer goes in a file with a pointer.</li>
+          <li><span class="tick">→</span> Each window's role <b style="color:var(--ink)">briefing</b> is written to disk; the window is kicked off with a one-liner pointing at it — long prompts never ride through tmux send-keys.</li>
+          <li><span class="tick">→</span> A baked-in <b style="color:var(--ink)">member allowlist</b> means a window can't message outside its own swarm; launch order is receivers-before-initiators so no ping lands on a window that doesn't exist yet.</li>
+        </ul>
+      </div>
+      <div class="stage" style="margin:0">
+        <div class="term">
+          <div class="term-bar">
+            <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+            <span class="term-title">~/.conductor2/swarms/x402-research/</span>
+          </div>
+          <div class="codeblock" style="border:0;border-radius:0">
+<span class="c"># the swarm's shared brain</span>
+mission.md
+prompts/      <span class="c"># per-agent briefings</span>
+  p1.md  p2.md  p3.md  p4.md
+out/          <span class="c"># real work products</span>
+  landscape.md  figures.csv  REPORT.md
+notes/        <span class="c"># scratch</span>
+swarm-say     <span class="c"># member-scoped ping helper</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PRESETS ============ -->
+<section class="divider">
+  <div class="wrap">
+    <div class="sec-eyebrow">Presets</div>
+    <h2>Premade swarms — fire as-is, or edit the purpose first</h2>
+    <div class="presets">
+      <div class="pcard">
+        <div class="pt"><span class="pe">🔬</span><h4>Deep Research</h4></div>
+        <div class="pmeta">hierarchical · 5 agents</div>
+        <p>Orchestrator splits a research question across 4 researchers — landscape, evidence, red-team
+          (counter-evidence), numbers — then synthesizes one cited, decision-grade report.</p>
+      </div>
+      <div class="pcard">
+        <div class="pt"><span class="pe">📈</span><h4>Market Bot Management</h4></div>
+        <div class="pmeta">mesh · 3 agents</div>
+        <p>Three peers each take one trading desk: confirm the bots are alive, audit the last 24h from the
+          ledgers, and propose tuning. Read-only — changes go in the report for a human.</p>
+      </div>
+      <div class="pcard">
+        <div class="pt"><span class="pe">🛡</span><h4>Web3 &amp; Security</h4></div>
+        <div class="pmeta">pipeline · 4 agents</div>
+        <p>Sequential review: recon maps the attack surface, the auditor digs line-by-line, the verifier
+          reproduces or kills each finding, the reporter writes a severity-ranked fix list.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ MCP TOOLS ============ -->
+<section class="divider">
+  <div class="wrap">
+    <div class="sec-eyebrow">The swarm MCP</div>
+    <h2>Plan and fire a fleet from any agent</h2>
+    <p class="lead">Conductor V2 speaks MCP over stdio, so any MCP-aware agent can design a swarm, preview it,
+      fire it, and stop it — natively. Read tools are free; the two that spawn or kill processes are flagged.</p>
+    <div class="tt">
+      <div class="ttrow head"><div>Tool</div><div>What it does</div><div>Kind</div></div>
+      <div class="ttrow"><div class="nm">list_formations</div><div class="ds">The three formations with diagram + when-to-use.</div><div><span class="kind safe">read</span></div></div>
+      <div class="ttrow"><div class="nm">list_presets</div><div class="ds">Premade configs (deep-research, market-bots, web3-security).</div><div><span class="kind safe">read</span></div></div>
+      <div class="ttrow"><div class="nm">plan_swarm</div><div class="ds">Dry run — resolve a config into concrete agents + briefings, launch nothing.</div><div><span class="kind safe">read</span></div></div>
+      <div class="ttrow"><div class="nm">list_swarms</div><div class="ds">Live swarms grouped from the managed-window registry.</div><div><span class="kind safe">read</span></div></div>
+      <div class="ttrow"><div class="nm">fire_swarm</div><div class="ds">Launch the fleet — N tmux windows, each kicked off with its briefing. All-or-nothing.</div><div><span class="kind act">spawns</span></div></div>
+      <div class="ttrow"><div class="nm">stop_swarm</div><div class="ds">Kill every window of a swarm. Irreversible — confirm first.</div><div><span class="kind act">kills</span></div></div>
+    </div>
+    <p class="lead" style="font-size:15.5px;margin-top:22px">
+      Watch a fired swarm from the V1 cockpit too — every window is a normal Claude Code session, so the
+      <code class="mono" style="background:var(--bg-soft);border:1px solid var(--line);padding:1px 6px;border-radius:5px;color:var(--ink)">claude-code</code> adapter sees them, grouped by status, problems first.</p>
+  </div>
+</section>
+
+<!-- ============ GET STARTED ============ -->
+<section id="start" class="divider">
+  <div class="wrap">
+    <div class="cta-band">
+      <div class="sec-eyebrow" style="color:#9db4ff">Get started</div>
+      <h2>Fire your first swarm</h2>
+      <p class="lead">Clone V2, register the MCP, and ask any session to plan and fire a fleet.</p>
+      <div class="codeblock" style="max-width:640px;margin:0 auto 26px;font-size:12.5px">
+<span class="c"># clone V2</span>
+<span class="k">$</span> git clone https://github.com/yksanjo/conductor2 ~/conductor-v2
+
+<span class="c"># register the swarm MCP (user scope = everywhere)</span>
+<span class="k">$</span> claude mcp add conductor2 --scope user -- node ~/conductor-v2/mcp.js
+
+<span class="c"># then, from any session:</span>
+<span class="k">›</span> plan a <span class="k">pipeline</span> swarm of 4 to security-review ~/soag-gate,
+  show me the briefings, then fire it</div>
+      <div class="hero-cta" style="justify-content:center">
+        <a class="btn btn-primary" href="https://github.com/yksanjo/conductor2">Conductor V2 on GitHub →</a>
+        <a class="btn btn-ghost" href="/">← Back to Conductor V1</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div>🎼 conductor · design the fleet, fire it, watch it · MIT</div>
+    <div class="flinks">
+      <a href="/">Conductor V1</a>
+      <a href="https://github.com/yksanjo/conductor2">V2 GitHub</a>
+      <a href="https://github.com/yksanjo/conductor">V1 GitHub</a>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,716 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Codex Conductor</title>
+<style>
+  :root {
+    --bg:#08080b; --bg2:#0b0b10;
+    --line:rgba(255,255,255,.06); --line2:rgba(255,255,255,.12);
+    --txt:#f3f3f8; --mut:#9696ab; --dim:#5c5c72;
+    --active:#3ee07f; --open:#46d8c6; --recent:#f5b13f; --idle:#6a6a85;
+    --accent:#a974ff; --accent2:#ff5cc8;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,monospace;
+    --sans:ui-sans-serif,-apple-system,"SF Pro Text",Inter,system-ui,sans-serif;
+  }
+  * { box-sizing:border-box; }
+  html { color-scheme:dark; }
+  body {
+    margin:0; background:var(--bg); color:var(--txt);
+    font:13.5px/1.5 var(--sans); -webkit-font-smoothing:antialiased; letter-spacing:.1px;
+    min-height:100vh;
+    background-image:
+      radial-gradient(900px 480px at 88% -8%, rgba(169,116,255,.10), transparent 70%),
+      radial-gradient(760px 420px at -4% 108%, rgba(255,92,200,.06), transparent 70%);
+  }
+  ::selection { background:rgba(169,116,255,.3); }
+  /* scrollbar */
+  ::-webkit-scrollbar { width:10px; height:10px; }
+  ::-webkit-scrollbar-thumb { background:#23232f; border-radius:6px; border:2px solid var(--bg); }
+
+  header {
+    display:flex; align-items:center; gap:14px; padding:13px 24px; position:sticky; top:0; z-index:20;
+    background:rgba(8,8,11,.72); backdrop-filter:blur(14px) saturate(1.2);
+    border-bottom:1px solid var(--line);
+  }
+  .brand { display:flex; align-items:center; gap:9px; font-size:14.5px; font-weight:640; letter-spacing:.2px; }
+  .brand .mk { background:linear-gradient(92deg,var(--accent),var(--accent2)); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .brand .ck { color:var(--mut); font-weight:500; letter-spacing:1px; }
+  .live { width:7px; height:7px; border-radius:50%; background:var(--active); box-shadow:0 0 0 0 var(--active); animation:pulse 2.4s infinite; }
+  @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(62,224,127,.45);} 70%{box-shadow:0 0 0 8px rgba(62,224,127,0);} 100%{box-shadow:0 0 0 0 rgba(62,224,127,0);} }
+  .count { color:var(--mut); font-size:12.5px; font-variant-numeric:tabular-nums; }
+  .spacer { flex:1; }
+  .legend { display:flex; gap:14px; font-size:11px; color:var(--mut); }
+  .legend i { width:7px; height:7px; border-radius:50%; display:inline-block; margin-right:5px; vertical-align:middle; }
+  .seg { display:flex; gap:1px; background:rgba(255,255,255,.04); border:1px solid var(--line); border-radius:9px; padding:2px; }
+  .seg button { border:0; background:transparent; color:var(--mut); font:inherit; font-size:11.5px; font-weight:600; padding:5px 11px; border-radius:7px; cursor:pointer; transition:.12s; }
+  .seg button:hover { color:var(--txt); }
+  .seg button.on { background:rgba(255,255,255,.09); color:var(--txt); box-shadow:0 1px 2px rgba(0,0,0,.3); }
+  .newbtn { font:inherit; font-size:12px; font-weight:650; color:var(--txt); background:linear-gradient(92deg,var(--accent),var(--accent2)); border:0; border-radius:9px; padding:7px 13px; cursor:pointer; transition:.12s; }
+  .newbtn:hover { filter:brightness(1.1); }
+  .manbtn { text-decoration:none; font-size:15px; line-height:1; padding:7px 9px; border:1px solid var(--line); border-radius:9px; background:rgba(255,255,255,.04); cursor:pointer; }
+  .manbtn:hover { border-color:var(--line2); }
+  .modal .qin { width:100%; }
+
+  main { padding:14px 24px 64px; max-width:1500px; margin:0 auto; }
+  .section-head { display:flex; align-items:center; gap:12px; margin:28px 2px 14px; }
+  .section-head:first-child { margin-top:10px; }
+  .section-head .sdot { width:7px; height:7px; border-radius:50%; flex:none; box-shadow:0 0 8px currentColor; }
+  .section-head .stitle { font-size:10.5px; font-weight:750; letter-spacing:1.6px; text-transform:uppercase; color:var(--mut); white-space:nowrap; }
+  .section-head .rule { flex:1; height:1px; background:linear-gradient(90deg,var(--line2),transparent); }
+  .section-head .scount { font-size:11px; color:var(--dim); font-variant-numeric:tabular-nums; flex:none; }
+
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(248px,1fr)); gap:14px; }
+  .card {
+    --c:var(--mut);
+    background:linear-gradient(165deg,rgba(255,255,255,.035),rgba(255,255,255,.012));
+    border:1px solid var(--line); border-radius:15px; padding:15px 16px 14px; cursor:pointer;
+    position:relative; isolation:isolate; transition:transform .14s ease, border-color .14s ease, box-shadow .14s ease;
+  }
+  .card::before {
+    content:''; position:absolute; inset:0; border-radius:inherit; padding:1px; pointer-events:none; opacity:0; transition:opacity .14s;
+    background:linear-gradient(165deg,var(--c),transparent 55%);
+    -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+    -webkit-mask-composite:xor; mask-composite:exclude;
+  }
+  .card:hover { transform:translateY(-2px); box-shadow:0 14px 34px rgba(0,0,0,.5), 0 0 0 1px var(--line2); }
+  .card:hover::before { opacity:.55; }
+  .card.idle { opacity:.66; }
+  .card.idle:hover { opacity:1; }
+
+  .ctop { display:flex; align-items:center; gap:8px; margin-bottom:9px; }
+  .pill { display:inline-flex; align-items:center; gap:6px; font-size:10.5px; font-weight:650; letter-spacing:.4px; text-transform:uppercase; color:var(--c); background:color-mix(in srgb,var(--c) 13%,transparent); border:1px solid color-mix(in srgb,var(--c) 26%,transparent); padding:3px 8px; border-radius:999px; }
+  .pill i { width:6px; height:6px; border-radius:50%; background:var(--c); }
+  .pill.active i { box-shadow:0 0 7px var(--c); }
+  .time { margin-left:auto; font-size:11px; color:var(--dim); font-variant-numeric:tabular-nums; white-space:nowrap; }
+
+  .label { font-size:15.5px; font-weight:660; letter-spacing:.1px; line-height:1.25; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .task { color:var(--mut); font-size:12.5px; line-height:1.45; margin:5px 0 13px; min-height:18px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .cfoot { display:flex; align-items:center; gap:7px; }
+  .chip { font-family:var(--mono); font-size:10.5px; color:var(--mut); background:rgba(255,255,255,.05); border:1px solid var(--line); border-radius:6px; padding:2px 7px; }
+  .mbadge { font-size:9px; font-weight:750; letter-spacing:.7px; text-transform:uppercase; color:var(--accent); background:rgba(169,116,255,.12); border:1px solid rgba(169,116,255,.3); border-radius:999px; padding:2px 7px; }
+  /* copilot-seat sharing: a card that's exposed to a remote seat wears a chip per seat */
+  .schip { font-size:9.5px; font-weight:700; letter-spacing:.3px; border-radius:999px; padding:2px 7px; white-space:nowrap; }
+  .schip.view { color:#46d8c6; background:rgba(70,216,198,.12); border:1px solid rgba(70,216,198,.32); }
+  .schip.collab { color:#f5b13f; background:rgba(245,177,63,.13); border:1px solid rgba(245,177,63,.34); }
+  .bshare { font:inherit; font-size:11px; line-height:1; padding:2px 7px; border:1px solid var(--line2); border-radius:7px; background:rgba(255,255,255,.04); color:var(--mut); cursor:pointer; transition:.12s; }
+  .bshare:hover { color:var(--txt); border-color:var(--accent); background:rgba(169,116,255,.16); }
+  .seatbtn { font:inherit; font-size:15px; line-height:1; padding:7px 9px; border:1px solid var(--line); border-radius:9px; background:rgba(255,255,255,.04); cursor:pointer; position:relative; }
+  .seatbtn:hover { border-color:var(--line2); }
+  .seatbtn .dot { position:absolute; top:5px; right:5px; width:6px; height:6px; border-radius:50%; background:var(--recent); box-shadow:0 0 6px var(--recent); }
+  /* seat management modal bits */
+  .seatrow { border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin:10px 0; background:rgba(255,255,255,.02); }
+  .seatrow .sh { display:flex; align-items:center; gap:9px; }
+  .seatrow .sh b { font-size:14px; }
+  .seatrow .sid { font-family:var(--mono); font-size:10.5px; color:var(--dim); }
+  .seatrow .grow { margin-left:auto; }
+  .grantline { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--mut); padding:5px 0; border-top:1px dashed var(--line); }
+  .grantline .gm { font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; padding:1px 6px; border-radius:999px; }
+  .gm.view { color:#46d8c6; border:1px solid rgba(70,216,198,.4); }
+  .gm.collab { color:#f5b13f; border:1px solid rgba(245,177,63,.4); }
+  .credbox { font-family:var(--mono); font-size:12px; color:#3ee07f; background:rgba(0,0,0,.35); border:1px solid rgba(62,224,127,.35); border-radius:8px; padding:10px 12px; word-break:break-all; user-select:all; }
+  .activity { max-height:160px; overflow:auto; font-family:var(--mono); font-size:11px; color:var(--mut); }
+  .activity div { padding:2px 0; border-top:1px solid var(--line); }
+  .bopen { font:inherit; font-size:10.5px; font-weight:650; color:var(--open); background:rgba(70,216,198,.1); border:1px solid rgba(70,216,198,.32); border-radius:7px; padding:2px 8px; cursor:pointer; transition:.12s; }
+  .bopen:hover { background:rgba(70,216,198,.22); }
+  /* tiny ✕ at the card's top-middle — hidden until card hover so it stays unobtrusive */
+  .xclose { position:absolute; top:6px; left:50%; transform:translateX(-50%); z-index:3; width:18px; height:18px; padding:0; line-height:16px; text-align:center; font-size:11px; font-weight:700; color:var(--mut); background:rgba(255,255,255,.04); border:1px solid var(--line); border-radius:50%; cursor:pointer; opacity:0; transition:.12s; }
+  .card:hover .xclose { opacity:.55; }
+  .xclose:hover { opacity:1; color:#ff8a96; background:rgba(255,90,106,.18); border-color:#ff5a6a; }
+
+  .ctrl { margin-top:12px; padding-top:12px; border-top:1px dashed var(--line); }
+  .qbtns { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:7px; }
+  .qb { font:inherit; font-size:11px; font-weight:600; color:var(--txt); background:rgba(255,255,255,.05); border:1px solid var(--line2); border-radius:7px; padding:4px 9px; cursor:pointer; transition:.12s; }
+  .qb:hover { background:rgba(169,116,255,.18); border-color:var(--accent); }
+  .qb.danger { color:#ff8a96; border-color:rgba(255,90,106,.4); }
+  .qb.danger:hover { background:rgba(255,90,106,.18); border-color:#ff5a6a; }
+  .bcast.fleet { background:linear-gradient(120deg,rgba(255,90,106,.12),rgba(245,177,63,.06)); border-color:rgba(255,90,106,.32); }
+  .bcast.fleet .blabel b, .bcast.fleet .blabel { color:#ff8a96; }
+  .qrow { display:flex; gap:5px; }
+  .qin { flex:1; min-width:0; font:inherit; font-size:11.5px; color:var(--txt); background:rgba(0,0,0,.25); border:1px solid var(--line); border-radius:7px; padding:5px 9px; }
+  .qin:focus { outline:none; border-color:var(--accent); }
+  .qin::placeholder { color:var(--dim); }
+  .qsend { font:inherit; color:var(--txt); background:rgba(169,116,255,.18); border:1px solid var(--accent); border-radius:7px; padding:5px 11px; cursor:pointer; }
+  .qsend:hover { background:rgba(169,116,255,.3); }
+  .toast { position:fixed; bottom:22px; left:50%; transform:translateX(-50%); background:#15151f; border:1px solid var(--line2); color:var(--txt); font-size:12.5px; padding:9px 16px; border-radius:10px; box-shadow:0 10px 30px rgba(0,0,0,.5); opacity:0; transition:opacity .2s; pointer-events:none; z-index:80; }
+  .toast.show { opacity:1; }
+
+  /* broadcast bar */
+  .bcast { display:flex; align-items:center; gap:9px; flex-wrap:wrap; margin:18px 0 4px; padding:12px 14px;
+    background:linear-gradient(120deg,rgba(169,116,255,.10),rgba(255,92,200,.06)); border:1px solid rgba(169,116,255,.28); border-radius:13px; }
+  .bcast .blabel { font-size:12px; font-weight:700; letter-spacing:.3px; color:var(--txt); margin-right:2px; }
+  .bcast .blabel b { color:var(--accent); }
+  .bcast .bbtns { display:flex; flex-wrap:wrap; gap:5px; }
+  .bcast .qin { flex:1; min-width:160px; }
+
+  .card.active { --c:var(--active); } .card.open { --c:var(--open); }
+  .card.recent { --c:var(--recent); } .card.idle { --c:var(--idle); }
+
+  .empty { color:var(--mut); text-align:center; padding:90px 0; font-size:13px; }
+
+  /* modal */
+  .scrim { position:fixed; inset:0; background:rgba(4,4,7,.72); backdrop-filter:blur(5px); display:none; align-items:center; justify-content:center; z-index:60; padding:24px; }
+  .scrim.show { display:flex; animation:fade .14s ease; }
+  @keyframes fade { from{opacity:0;} to{opacity:1;} }
+  .modal { width:min(660px,100%); max-height:86vh; overflow:auto; background:linear-gradient(180deg,#13131b,#0e0e14); border:1px solid var(--line2); border-radius:20px; padding:26px 28px; box-shadow:0 30px 80px rgba(0,0,0,.6); }
+  .modal h2 { margin:0 0 3px; font-size:22px; font-weight:680; letter-spacing:.2px; }
+  .modal .sub { color:var(--dim); font-size:12px; font-family:var(--mono); margin-bottom:20px; word-break:break-all; }
+  .kv { margin:15px 0; }
+  .kv .k { color:var(--dim); font-size:10px; text-transform:uppercase; letter-spacing:1px; margin-bottom:5px; font-weight:700; }
+  .kv .v { color:var(--txt); font-size:13.5px; word-break:break-word; line-height:1.5; }
+  .timeline { display:flex; flex-direction:column; gap:9px; margin-top:4px; }
+  .ev { display:flex; gap:9px; font-size:12.5px; color:var(--mut); line-height:1.4; }
+  .ev .who { font-family:var(--mono); font-size:10px; color:var(--dim); text-transform:uppercase; letter-spacing:.5px; flex:none; width:46px; padding-top:1px; }
+  .ev .what { word-break:break-word; }
+  .close { float:right; cursor:pointer; color:var(--mut); font-size:22px; line-height:1; border:0; background:0; transition:color .12s; }
+  .close:hover { color:var(--txt); }
+  .foot { color:var(--dim); font-size:11px; font-family:var(--mono); margin-top:24px; padding-top:16px; border-top:1px solid var(--line); }
+</style>
+</head>
+<body>
+<header>
+  <span class="live"></span>
+  <span class="brand"><span class="mk">Codex Conductor</span> <span class="ck">Cockpit</span></span>
+  <span class="count" id="count"></span>
+  <span class="spacer"></span>
+  <div class="legend">
+    <span><i style="background:#3ee07f"></i>working</span>
+    <span><i style="background:#46d8c6"></i>open</span>
+    <span><i style="background:#f5b13f"></i>recent</span>
+  </div>
+  <div class="seg" id="seg">
+    <button data-m="10">10m</button>
+    <button data-m="60" class="on">1h</button>
+    <button data-m="1440">1d</button>
+    <button data-m="all">all</button>
+  </div>
+  <button class="newbtn" id="newbtn">+ New window</button>
+  <button class="seatbtn" id="seatbtn" title="Copilot seats — who can co-work remotely">🪑</button>
+  <a class="manbtn" href="/manual" target="_blank" title="Quick manual">📖</a>
+</header>
+<main>
+  <div class="bcast" id="bcast" style="display:none">
+    <span class="blabel">⚡ Prompt all managed <b id="bcount">0</b></span>
+    <div class="bbtns" id="bbtns"></div>
+    <input class="qin" id="binput" placeholder="message all managed windows…">
+    <button class="qsend" id="bsend">↵</button>
+  </div>
+  <div id="board"></div>
+  <div class="empty" id="empty" style="display:none"></div>
+</main>
+
+<div class="scrim" id="scrim"><div class="modal" id="modal"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const ADAPTER = '__ADAPTER__';
+let META = __META__;                 // { adapter, statuses:[{key,title,word,color}], capabilities }
+const IS_AGENT = ADAPTER === 'claude-code' || ADAPTER === 'codex-code';
+let WINDOW = '60';
+let DATA = [];
+let lastHash = '';
+// Last broadcast/reply outcome per managed window, so a card can show whether the prompt
+// actually landed (the aggregate toast used to hide this). label -> {status, stage, at}.
+let BCAST = {};
+
+// One chip describing a delivery outcome. Keep it quiet for plain success; shout when skipped.
+function bcastChip(label){
+  const b = BCAST[label]; if (!b) return '';
+  if (Date.now() - b.at > 45000) return '';            // fade after ~45s; it's a transient signal
+  const M = {
+    started:        ['✅ running',   'var(--ok,#3ecf8e)', 'prompt accepted — turn is running'],
+    sent:           ['↵ sent',       'var(--ok,#3ecf8e)', 'prompt delivered to a ready prompt'],
+    skipped:        ['⏸ '+(b.stage==='trust'?'trust prompt':b.stage==='resume'?'resume picker':'busy'),
+                     '#d9a441', 'not at a ready prompt ('+(b.stage||'busy')+') — nothing was typed; open the window'],
+    gone:           ['✕ gone',       'var(--dim)',        'window no longer exists'],
+    error:          ['⚠ error',      '#e5484d',           'send failed'],
+  };
+  const m = M[b.status]; if (!m) return '';
+  return '<span class="chip" style="color:'+m[1]+';border-color:'+m[1]+'" title="'+esc(m[2])+'">'+esc(m[0])+'</span>';
+}
+function recordBcast(results){
+  const now = Date.now();
+  (results||[]).forEach(r => { if (r && r.label) BCAST[r.label] = { status:r.status, stage:r.stage, at:now }; });
+}
+
+const esc = (s)=> (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function statusMeta(k){ return (META.statuses||[]).find(s=>s.key===k) || { key:k, title:k, word:k, color:'#6a6a85' }; }
+function statusLabel(k){ return statusMeta(k).word; }
+function sections(){ return (META.statuses||[]).map(s=>({ k:s.key, t:s.title, c:s.color })); }
+
+function typingNow() {
+  const a = document.activeElement;
+  return a && a.classList && a.classList.contains('qin');
+}
+async function load() {
+  const q = WINDOW==='all' ? 'all=1' : 'minutes='+WINDOW;
+  try {
+    const r = await fetch('/api/sessions?adapter='+encodeURIComponent(ADAPTER)+'&'+q);
+    const j = await r.json();
+    DATA = j.sessions;
+    if (j.statuses) META = { adapter:j.adapter, statuses:j.statuses, capabilities:j.capabilities, destructive:j.destructive||[], broadcastUi:j.broadcastUi||null };
+    // Structure = which windows / status / managed. Time + last-action churn every few
+    // seconds but DON'T change structure, so we update those in place and never rebuild the
+    // DOM (which would wipe a reply you're typing). Only a real structural change rebuilds —
+    // and even then we defer while you're typing.
+    const structure = WINDOW + '|' + JSON.stringify(DATA.map(s=>[s.id||s.sessionId,s.status,s.managed,(s.seatVisibility||[]).map(v=>v.seatId+v.mode).join(',')]));
+    if (structure !== lastHash && !typingNow()) { lastHash = structure; render(); }
+    else updateInPlace();
+  } catch(e) { /* keep last render */ }
+}
+
+function updateInPlace() {
+  const unit = IS_AGENT ? 'session' : 'bot';
+  document.getElementById('count').textContent = DATA.length ? DATA.length+' '+unit+(DATA.length>1?'s':'') : '';
+  const bc = document.getElementById('bcount'); if (bc) bc.textContent = DATA.filter(s=>s.managed).length;
+  for (const s of DATA) {
+    const card = document.querySelector('.card[data-id="'+(s.id||s.sessionId)+'"]');
+    if (!card) continue;
+    const t = card.querySelector('.time'); if (t && t.textContent !== s.lastActiveRel) t.textContent = s.lastActiveRel;
+    const tk = card.querySelector('.task'); const v = s.lastAction || s.intent || '—';
+    if (tk && tk.textContent !== v) tk.textContent = v;
+  }
+}
+
+const QUICK = [
+  ['Yes','yes'], ['No','no'], ['Continue','continue'],
+  ['Review','review what you just did and report back'],
+  ['Re-iterate','re-iterate and improve it'],
+  ['Test+deploy','review and test it before deploying'],
+];
+
+function ctrlHTML(s) {
+  // Managed windows send directly (data-label). Plain windows adopt-then-send (data-session).
+  const attr = s.managed ? 'data-label="'+esc(s.mlabel)+'"' : 'data-session="'+esc(s.sessionId)+'"';
+  const ph = s.managed ? 'reply to '+esc(s.mlabel)+'…' : 'reply — adopts this window…';
+  const btns = QUICK.map(q => '<button class="qb" '+attr+' data-text="'+esc(q[1])+'">'+q[0]+'</button>').join('');
+  return '<div class="ctrl"><div class="qbtns">'+btns+'</div>'
+       + '<div class="qrow"><input class="qin" '+attr+' placeholder="'+ph+'">'
+       + '<button class="qsend" '+attr+'>↵</button></div></div>';
+}
+
+function cardHTML(s) {
+  return IS_AGENT ? claudeCard(s) : fleetCard(s);
+}
+function claudeCard(s) {
+  const sm = statusMeta(s.status);
+  return `<div class="card ${s.status}" data-id="${s.sessionId}" style="--c:${sm.color}">
+      ${s.managed ? '<button class="xclose" data-close="'+esc(s.mlabel)+'" title="Close this window (kills its tmux session — irreversible)">✕</button>' : ''}
+      <div class="ctop">
+        <span class="pill ${s.status}" style="--c:${sm.color}"><i></i>${statusLabel(s.status)}</span>
+        ${s.managed ? '<span class="mbadge">managed</span>' : ''}
+        <span class="time">${esc(s.lastActiveRel)}</span>
+      </div>
+      <div class="label">${esc(s.title || s.label)}</div>
+      <div class="task">${esc(s.lastAction || s.intent || '—')}</div>
+      <div class="cfoot">${s.managed ? bcastChip(s.mlabel) : ''}${s.place ? '<span class="chip">'+esc(s.place)+'</span>' : ''}${s.gitBranch ? '<span class="chip">'+esc(s.gitBranch)+'</span>' : ''}${seatChips(s)}<button class="bshare" data-share="${esc(s.sessionId)}" data-label="${esc(s.title || s.label)}" title="Share this window with a copilot seat">👥</button>${s.managed ? '<button class="bopen" data-open="'+esc(s.mlabel)+'" title="Open this window in Terminal">↗ open</button>' : ''}</div>
+      ${ctrlHTML(s)}
+    </div>`;
+}
+// Human labels for control commands across every fleet adapter (trading bot / mev / validator).
+const CMD_LABEL = {
+  pause:'⏸ Pause', resume:'▶ Resume', flatten:'🛑 Flatten', kill:'⛔ Kill', unwind:'🧹 Unwind',
+  restart:'🔁 Restart', catchup:'⏩ Catch up', 'topup-identity':'💧 Top up', drain:'🚰 Drain',
+};
+// Fleet card: read-only observation + opt-in per-unit control. Buttons are generated from the
+// adapter's advertised capabilities; ones in META.destructive get the danger style and are
+// double-confirmed in fleetControl(). set-param needs a value, so it's driven via API, not a button.
+function fleetCard(s) {
+  const sm = statusMeta(s.status);
+  const chips = (s.context||[]).map(c=>'<span class="chip">'+esc(c)+'</span>').join('');
+  const caps = META.capabilities || [];
+  const danger = new Set(META.destructive || []);
+  const btns = caps.filter(c=>CMD_LABEL[c]).map(cmd=>{
+    const cls = danger.has(cmd) ? ' danger' : '';
+    return '<button class="qb'+cls+'" data-bot="'+esc(s.id)+'" data-cmd="'+esc(cmd)+'">'+CMD_LABEL[cmd]+'</button>';
+  }).join('');
+  return `<div class="card ${s.status}" data-id="${esc(s.id)}" style="--c:${sm.color}">
+      <div class="ctop">
+        <span class="pill" style="--c:${sm.color}"><i></i>${statusLabel(s.status)}</span>
+        <span class="time">${esc(s.lastActiveRel)}</span>
+      </div>
+      <div class="label">${esc(s.title || s.label)}</div>
+      <div class="task">${esc(s.lastAction || s.intent || '—')}</div>
+      <div class="cfoot">${chips}</div>
+      ${btns ? '<div class="ctrl"><div class="qbtns">'+btns+'</div></div>' : ''}
+    </div>`;
+}
+
+let toastT;
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastT); toastT = setTimeout(()=>t.classList.remove('show'), 2200);
+}
+async function reply(label, text) {
+  if (!text || !text.trim()) return;
+  try {
+    const r = await fetch('/api/say', { method:'POST', headers:{'content-type':'application/json','x-conductor':'1'}, body:JSON.stringify({label, text}) });
+    const j = await r.json();
+    recordBcast([{ label: j.label || label, status: j.ok ? (j.status||'sent') : (j.status||'error'), stage: j.stage }]);
+    if (j.ok) toast(j.status==='started' ? '✅ '+label+' is running it' : '↵ sent to '+label);
+    else toast(j.status==='skipped' ? '⏸ '+label+' not ready ('+(j.stage||'busy')+') — nothing typed' : 'send failed: '+(j.error||j.status||'?'));
+    render();
+  } catch(e) { toast('send failed'); }
+}
+async function replyAll(text) {
+  if (!text || !text.trim()) return;
+  try {
+    const r = await fetch('/api/say-all', { method:'POST', headers:{'content-type':'application/json','x-conductor':'1'}, body:JSON.stringify({text}) });
+    const j = await r.json();
+    if (!j.ok) { toast('broadcast failed'); return; }
+    recordBcast(j.results);
+    const n = j.total||0, ok = j.started||0, skip = j.skipped||0;
+    toast(skip ? '⚡ '+ok+'/'+n+' got it · '+skip+' skipped (see cards)' : '⚡ all '+ok+' window'+(ok===1?'':'s')+' got “'+text+'”');
+    render();   // paint the per-window chips immediately
+  } catch(e) { toast('broadcast failed'); }
+}
+// reply to a plain (unmanaged) window: adopt it into tmux, then deliver the message there
+async function replyAdopt(sessionId, text) {
+  if (!text || !text.trim()) return;
+  toast('adopting window + sending “'+text+'”…');
+  try {
+    const r = await fetch('/api/adopt-say', { method:'POST', headers:{'content-type':'application/json','x-conductor':'1'}, body:JSON.stringify({session:sessionId, text}) });
+    const j = await r.json();
+    toast(j.ok ? '✓ “'+j.label+'” adopted — reply goes to the managed copy; close the original tab' : 'failed: '+(j.error||'?'));
+    lastHash=''; load();
+  } catch(e) { toast('failed'); }
+}
+async function openTerm(label) {
+  toast('opening “'+label+'” in Terminal…');
+  try {
+    const r = await fetch('/api/open', { method:'POST', headers:{'content-type':'application/json','x-conductor':'1'}, body:JSON.stringify({label}) });
+    const j = await r.json();
+    toast(j.ok ? (j.attached ? '↗ brought Terminal to front · '+label : '↗ opened “'+label+'” in a new Terminal') : 'open failed: '+(j.error||'?'));
+  } catch(e) { toast('open failed'); }
+}
+// Close a managed window — kills its tmux session, so the live session's state is gone for
+// good. Double-confirm in the browser, then send the label as a confirm token (the endpoint
+// rejects without it). Only managed windows expose this button; plain windows live in your own
+// terminal tabs and must be closed there.
+async function closeWindow(label) {
+  if (!confirm('Close “'+label+'”?\n\nThis kills its tmux session — the live agent session and its state are lost. This cannot be undone.')) return;
+  toast('closing “'+label+'”…');
+  try {
+    const r = await fetch('/api/stop', { method:'POST', headers:{'content-type':'application/json','x-conductor':'1'}, body:JSON.stringify({label, confirm:label}) });
+    const j = await r.json();
+    toast(j.ok ? '✕ closed “'+label+'”' : 'close failed: '+(j.error||'?'));
+    if (j.ok) { lastHash=''; load(); }
+  } catch(e) { toast('close failed'); }
+}
+// Click a card → bring its live CLI to the front. Managed windows already live in tmux, so we
+// just surface the terminal. A plain (unmanaged) window has no terminal handle we can focus, so
+// we adopt it into tmux — that gives you a real CLI for it — then open that. No more
+// read-only dialog: a click means "show me this session in a terminal".
+async function openCLI(id) {
+  const s = DATA.find(x=>x.sessionId===id);
+  if (!s) return;
+  if (s.managed) { openTerm(s.mlabel); return; }
+  toast('opening CLI — adopting this window…');
+  try {
+    const r = await fetch('/api/adopt', { method:'POST', headers:{'content-type':'application/json','x-conductor':'1'}, body:JSON.stringify({session:id}) });
+    const j = await r.json();
+    if (j.ok) { openTerm(j.label); lastHash=''; load(); }
+    else toast('open failed: '+(j.error||'?'));
+  } catch(e) { toast('open failed'); }
+}
+// --- fleet control: per-unit command + desk-wide broadcast --------------------------------
+async function fleetControl(bot, cmd) {
+  let confirmTok;
+  if ((META.destructive||[]).includes(cmd)) {
+    if (!confirm((CMD_LABEL[cmd]||cmd)+' '+bot+'?\n\nThis is a destructive command and cannot be undone.')) return;
+    confirmTok = cmd;
+  }
+  try {
+    const r = await fetch('/api/control', { method:'POST', headers:{'content-type':'application/json','x-conductor':'1'},
+      body:JSON.stringify({ adapter:ADAPTER, target:bot, command:{cmd}, confirm:confirmTok }) });
+    const j = await r.json();
+    toast(j.ok ? '→ '+cmd+' → '+bot : (cmd+' failed: '+(j.error||'?')));
+  } catch(e) { toast(cmd+' failed'); }
+}
+// Desk-wide broadcast, driven by the adapter's broadcastUi hint. Dangerous broadcasts (fleet
+// flatten-all) double-confirm; benign ones (mev pause-all, validator report-all) confirm once.
+// Always carries a confirm token (the server treats every broadcast as confirm-gated).
+async function deskBroadcast(cmd, danger) {
+  if (danger) {
+    if (!confirm('⚠ Broadcast '+cmd+' to the ENTIRE fleet?\nEvery unit gets the command.')) return;
+    if (!confirm('Are you absolutely sure? This affects ALL units.')) return;
+  } else {
+    if (!confirm('Broadcast '+cmd+' to every unit?')) return;
+  }
+  try {
+    const r = await fetch('/api/broadcast', { method:'POST', headers:{'content-type':'application/json','x-conductor':'1'},
+      body:JSON.stringify({ adapter:ADAPTER, command:{cmd}, confirm:cmd }) });
+    const j = await r.json();
+    if (!j.ok) { toast(cmd+' failed: '+(j.error||'?')); return; }
+    if (j.report) toast('🔄 report → '+(j.units?j.units.length:0)+' units');
+    else toast('→ '+cmd+' sent to '+(j.sent||0)+'/'+(j.total||0)+' units');
+  } catch(e) { toast(cmd+' failed'); }
+}
+
+// Adapt the header + broadcast bar to the active adapter. Codex/Claude keep the "prompt all managed"
+// bar + New-window button; fleet replaces them with a desk-wide panic-flatten band.
+function setupChrome() {
+  const ck = document.querySelector('.ck'); if (ck) ck.textContent = IS_AGENT ? 'Cockpit' : 'Fleet';
+  const legend = document.querySelector('.legend');
+  if (legend) legend.innerHTML = (META.statuses||[]).filter(s=>s.key!=='idle')
+    .map(s=>'<span><i style="background:'+s.color+'"></i>'+esc(s.word)+'</span>').join('');
+  if (!IS_AGENT) {
+    const nb = document.getElementById('newbtn'); if (nb) nb.style.display='none';
+    const sb = document.getElementById('seatbtn'); if (sb) sb.style.display='none';
+    const bc = document.getElementById('bcast');
+    const ui = META.broadcastUi;
+    if (ui) {
+      if (ui.danger) bc.classList.add('fleet');
+      bc.innerHTML = '<span class="blabel">'+(ui.danger?'🛑':'⚡')+' Desk-wide</span>'
+        + '<div class="bbtns"><button class="qb'+(ui.danger?' danger':'')+'" id="deskBtn">'+esc(ui.label)+'</button></div>'
+        + '<span style="color:var(--dim);font-size:11px">read-only observation · opt-in control</span>';
+      bc.style.display = 'flex';
+      document.getElementById('deskBtn').addEventListener('click', ()=>deskBroadcast(ui.cmd, !!ui.danger));
+    } else {
+      bc.style.display = 'none';
+    }
+  } else {
+    // build agent broadcast quick-buttons once
+    document.getElementById('bbtns').innerHTML = QUICK.map(q => '<button class="qb" data-all="'+esc(q[1])+'">'+q[0]+'</button>').join('');
+  }
+}
+setupChrome();
+
+function openLauncher() {
+  document.getElementById('modal').innerHTML = `
+    <button class="close" onclick="closeModal()">×</button>
+    <h2>New managed window</h2>
+    <div class="sub">launches ${ADAPTER==='codex-code' ? 'Codex' : 'Claude'} in a tmux window you can drive from this dashboard</div>
+    <div class="kv"><div class="k">Name</div><input class="qin" id="newlabel" placeholder="e.g. soag, research, fix-bug"></div>
+    <div class="kv"><div class="k">Folder</div><input class="qin" id="newcwd" placeholder="~ (home) — or a path like ~/soag-grid"></div>
+    <div class="kv"><button class="qsend" style="padding:8px 18px" onclick="launchWin()">Launch ▸</button></div>
+    <div class="foot">opens in tmux · answer its trust prompt with a quick reply (1), then control it from the cards</div>`;
+  document.getElementById('scrim').classList.add('show');
+  setTimeout(()=>{ const el=document.getElementById('newlabel'); if(el) el.focus(); }, 60);
+}
+async function launchWin() {
+  const label = (document.getElementById('newlabel').value||'').trim();
+  const cwd = (document.getElementById('newcwd').value||'').trim();
+  if (!label) { toast('give it a name'); return; }
+  toast('launching “'+label+'”…');
+  try {
+    const r = await fetch('/api/run', { method:'POST', headers:{'content-type':'application/json','x-conductor':'1'}, body:JSON.stringify({label, cwd}) });
+    const j = await r.json();
+    if (j.ok) { toast('launched “'+j.label+'”'); closeModal(); lastHash=''; load(); }
+    else toast('launch failed: '+(j.error||'?'));
+  } catch(e) { toast('launch failed'); }
+}
+document.getElementById('newbtn').addEventListener('click', openLauncher);
+document.getElementById('seatbtn').addEventListener('click', openSeats);
+
+// --- Copilot Seats (remote co-working, scoped & deny-by-default) -----------------------------
+const HDR = {'content-type':'application/json','x-conductor':'1'};
+let SEAT_CTX = null;   // remembers the open seat modal so a grant/revoke can refresh it in place
+
+// Inline chips on a card showing which copilot seats can see it (👁 view / ✍ collaborate).
+function seatChips(s){
+  if (!s.seatVisibility || !s.seatVisibility.length) return '';
+  return s.seatVisibility.map(v =>
+    '<span class="schip '+(v.mode==='collaborate'?'collab':'view')+'" title="shared with copilot seat: '+esc(v.seatLabel)+' ('+esc(v.mode)+')">👥 '+esc(v.seatLabel)+' '+(v.mode==='collaborate'?'✍':'👁')+'</span>'
+  ).join('');
+}
+async function fetchSeats(){ try { return await (await fetch('/api/seats')).json(); } catch { return {seats:[],recentActivity:[]}; } }
+async function postSeat(body){
+  try { return await (await fetch('/api/seats',{method:'POST',headers:HDR,body:JSON.stringify(body)})).json(); }
+  catch { return {ok:false,error:'network'}; }
+}
+function timeAgo(iso){ const t=Date.parse(iso); if(!t) return ''; const s=Math.max(0,(Date.now()-t)/1000); if(s<60)return Math.floor(s)+'s ago'; if(s<3600)return Math.floor(s/60)+'m ago'; if(s<86400)return Math.floor(s/3600)+'h ago'; return Math.floor(s/86400)+'d ago'; }
+
+// Manage modal: every seat, what each can see, the activity audit, and a create field.
+async function openSeats(){
+  SEAT_CTX = 'manage';
+  const data = await fetchSeats();
+  const live = (data.seats||[]).filter(s=>!s.revokedAt);
+  const seatHTML = live.length ? live.map(s=>{
+    const grants = (s.grants||[]).map(g=>
+      '<div class="grantline"><span>'+esc(g.session||g.sessionId)+'</span>'
+      +'<span class="gm '+(g.mode==='collaborate'?'collab':'view')+'">'+(g.mode==='collaborate'?'✍ collaborate':'👁 view')+'</span>'
+      +'<button class="qb danger grow" onclick="revokeGrant(\''+s.id+'\',\''+g.sessionId+'\')">revoke</button></div>'
+    ).join('') || '<div class="grantline" style="color:var(--dim)">no windows shared yet — use 👥 on a card</div>';
+    return '<div class="seatrow"><div class="sh"><b>🪑 '+esc(s.label)+'</b><span class="sid">'+esc(s.id)+'</span>'
+      +'<span class="sid">'+(s.lastSeen?('seen '+esc(timeAgo(s.lastSeen))):'never connected')+'</span>'
+      +'<button class="qb danger grow" onclick="revokeSeatAll(\''+s.id+'\')">kill seat</button></div>'
+      + grants + '</div>';
+  }).join('') : '<div class="sub">No seats yet. Create one, then share specific windows with 👥.</div>';
+  const act = (data.recentActivity||[]).slice().reverse().map(e=>
+    '<div>'+esc((e.ts||'').slice(11,19))+' · '+esc(e.action)+' · '+esc(e.outcome)+(e.seatId?(' · '+esc(e.seatId)):'')+(e.sessionId?(' · '+esc(String(e.sessionId).slice(0,8))):'')+(e.detail?(' · '+esc(e.detail)):'')+'</div>'
+  ).join('') || '<div style="color:var(--dim)">no activity yet</div>';
+  document.getElementById('modal').innerHTML =
+    '<button class="close" onclick="closeModal()">×</button>'
+    + '<h2>🪑 Copilot Seats</h2>'
+    + '<div class="sub">remote co-working, deny-by-default · a seat sees ONLY the windows you share · everything else stays private &amp; invisible</div>'
+    + '<div class="kv"><div class="k">New seat</div><div style="display:flex;gap:6px"><input class="qin" id="newseat" placeholder="copilot name e.g. alex"><button class="qsend" onclick="createNewSeat()">+ create</button></div></div>'
+    + seatHTML
+    + '<div class="kv"><div class="k">Recent activity — what copilots did</div><div class="activity">'+act+'</div></div>'
+    + '<div class="foot">expose the seat server (:7593) via a tunnel you control · the full cockpit (:7591) never leaves your machine</div>';
+  document.getElementById('scrim').classList.add('show');
+}
+
+// Per-card picker: grant THIS window to any seat at view/collaborate.
+async function openExpose(sessionId, label){
+  SEAT_CTX = { sessionId, label };
+  const data = await fetchSeats();
+  const live = (data.seats||[]).filter(s=>!s.revokedAt);
+  const rows = live.map(s=>{
+    const g = (s.grants||[]).find(x=>x.sessionId===sessionId);
+    const cur = g ? g.mode : null;
+    return '<div class="grantline"><span class="grow">🪑 '+esc(s.label)+'</span>'
+      +'<button class="qb" style="'+(cur==='view'?'border-color:var(--accent)':'')+'" onclick="grantSeat(\''+s.id+'\',\''+sessionId+'\',\'view\')">👁 view</button>'
+      +'<button class="qb" style="'+(cur==='collaborate'?'border-color:var(--accent)':'')+'" onclick="grantSeat(\''+s.id+'\',\''+sessionId+'\',\'collaborate\')">✍ collaborate</button>'
+      +(cur?'<button class="qb danger" onclick="revokeGrant(\''+s.id+'\',\''+sessionId+'\')">revoke</button>':'')
+      +'</div>';
+  }).join('');
+  document.getElementById('modal').innerHTML =
+    '<button class="close" onclick="closeModal()">×</button>'
+    + '<h2>Share “'+esc(label)+'”</h2>'
+    + '<div class="sub">grant a copilot seat access to THIS window only — every other window stays invisible to them</div>'
+    + (live.length ? rows : '<div class="sub">No seats yet — create one below.</div>')
+    + '<div class="kv"><div class="k">New seat, then view-grant this window</div><div style="display:flex;gap:6px"><input class="qin" id="exposeNew" placeholder="copilot name e.g. alex"><button class="qsend" onclick="createSeatThenGrant(\''+sessionId+'\')">+ create &amp; share</button></div></div>';
+  document.getElementById('scrim').classList.add('show');
+}
+function refreshSeatModal(){ if (SEAT_CTX==='manage') openSeats(); else if (SEAT_CTX&&SEAT_CTX.sessionId) openExpose(SEAT_CTX.sessionId, SEAT_CTX.label); }
+
+async function createNewSeat(){
+  // Wrapped end-to-end so a click can NEVER silently do nothing — any failure surfaces a toast.
+  try {
+    const el=document.getElementById('newseat'); const label=(el&&el.value||'').trim();
+    if (!label){ toast('name the copilot'); return; }
+    const j=await postSeat({action:'create',label});
+    if (j&&j.ok) showCredential(j); else toast('create failed: '+((j&&j.error)||'?'));
+  } catch(e){ toast('create failed: '+(e&&e.message||'unexpected error')); }
+}
+async function createSeatThenGrant(sessionId){
+  try {
+    const el=document.getElementById('exposeNew'); const label=(el&&el.value||'').trim();
+    if (!label){ toast('name the copilot'); return; }
+    const j=await postSeat({action:'create',label});
+    if (!j||!j.ok){ toast('create failed: '+((j&&j.error)||'?')); return; }
+    const g=await postSeat({action:'grant',seatId:j.seatId,session:sessionId,mode:'view'});
+    // Grant can fail (e.g. the window closed) — don't let the credential modal claim it was
+    // shared when it wasn't. Show the credential, but only confirm the grant when it took.
+    if (!g||!g.ok){ toast('seat created but share failed: '+((g&&g.error)||'?')); showCredential(j); return; }
+    showCredential(j, sessionId);
+  } catch(e){ toast('create & share failed: '+(e&&e.message||'unexpected error')); }
+}
+async function grantSeat(seatId, session, mode){
+  const j=await postSeat({action:'grant',seatId,session,mode});
+  toast(j&&j.ok ? '👥 shared ('+mode+')' : 'grant failed: '+((j&&j.error)||'?'));
+  if (j&&j.ok){ lastHash=''; load(); refreshSeatModal(); }
+}
+async function revokeGrant(seatId, session){
+  const j=await postSeat({action:'revoke',seatId,session});
+  toast(j&&j.ok ? '🔒 access removed' : 'revoke failed');
+  if (j&&j.ok){ lastHash=''; load(); refreshSeatModal(); }
+}
+async function revokeSeatAll(seatId){
+  if (!confirm('Kill this seat?\n\nIts credential stops working immediately and all of its access is cut.')) return;
+  const j=await postSeat({action:'revoke',seatId});
+  toast(j&&j.ok ? '⛔ seat killed' : 'failed');
+  if (j&&j.ok){ lastHash=''; load(); refreshSeatModal(); }
+}
+// The credential is shown ONCE (the server stores only its hash). Surface it for the host to copy.
+function showCredential(j, sessionId){
+  lastHash=''; load();
+  document.getElementById('modal').innerHTML =
+    '<button class="close" onclick="closeModal()">×</button>'
+    + '<h2>Seat “'+esc(j.label)+'” created</h2>'
+    + '<div class="sub">copy this credential now — it is shown ONCE</div>'
+    + '<div class="kv"><div class="k">Credential — give to the copilot, out of band</div><div class="credbox">'+esc(j.credential)+'</div></div>'
+    + '<div class="kv"><div class="k">1 · You start the seat server</div><div class="v">run <code>codex-conductor seat</code> (binds 127.0.0.1:7593), then expose it via a tunnel you control (cloudflared / tailscale). The full cockpit (:7591) stays local.</div></div>'
+    + '<div class="kv"><div class="k">2 · They connect</div><div class="v">the copilot runs the <b>codex-conductor-seat</b> MCP (<code>codex-conductor seat-mcp</code>) → <code>seat_connect{ url, credential }</code>, where url is your tunnel. They see ONLY the windows you share.</div></div>'
+    + (sessionId?'<div class="kv"><div class="v">✓ this window was view-granted. Add more with 👥 on any card.</div></div>':'<div class="kv"><div class="v">This seat sees nothing yet — share specific windows with 👥 on each card.</div></div>')
+    + '<div class="kv"><button class="qsend" onclick="openSeats()">manage seats →</button></div>';
+}
+
+function render() {
+  const board = document.getElementById('board');
+  const empty = document.getElementById('empty');
+  const unit = IS_AGENT ? 'session' : 'bot';
+  document.getElementById('count').textContent = DATA.length ? DATA.length+' '+unit+(DATA.length>1?'s':'') : '';
+  if (IS_AGENT) {
+    const mc = DATA.filter(s=>s.managed).length;
+    document.getElementById('bcount').textContent = mc;
+    document.getElementById('bcast').style.display = mc ? 'flex' : 'none';
+  }
+  if (!DATA.length) {
+    board.innerHTML=''; empty.style.display='block';
+    empty.textContent = 'No sessions in this window. Try a wider range →';
+    return;
+  }
+  empty.style.display='none';
+  let html = '';
+  for (const sec of sections()) {
+    const items = DATA.filter(s => s.status === sec.k);
+    if (!items.length) continue;
+    html += `<div class="section-head"><span class="sdot" style="color:${sec.c};background:${sec.c}"></span>`
+         +  `<span class="stitle">${sec.t}</span><span class="rule"></span>`
+         +  `<span class="scount">${items.length}</span></div>`;
+    html += '<div class="grid">' + items.map(cardHTML).join('') + '</div>';
+  }
+  board.innerHTML = html;
+}
+
+function closeModal(){ document.getElementById('scrim').classList.remove('show'); }
+
+document.getElementById('seg').addEventListener('click', e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  document.querySelectorAll('#seg button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); WINDOW=b.dataset.m; lastHash=''; load();
+});
+// delegated card + control handlers (survive innerHTML refresh)
+const boardEl = document.getElementById('board');
+function dispatchReply(el, text) {
+  if (el.dataset.label != null) reply(el.dataset.label, text);              // managed → direct
+  else if (el.dataset.session != null) replyAdopt(el.dataset.session, text); // plain → adopt + send
+}
+boardEl.addEventListener('click', e=>{
+  const fb = e.target.closest('[data-cmd]');                 // fleet control button
+  if (fb) { e.stopPropagation(); fleetControl(fb.dataset.bot, fb.dataset.cmd); return; }
+  const sh = e.target.closest('.bshare');
+  if (sh) { e.stopPropagation(); openExpose(sh.dataset.share, sh.dataset.label); return; }
+  const ob = e.target.closest('.bopen');
+  if (ob) { e.stopPropagation(); openTerm(ob.dataset.open); return; }
+  const cb = e.target.closest('.xclose');
+  if (cb) { e.stopPropagation(); closeWindow(cb.dataset.close); return; }
+  const qb = e.target.closest('.qb,.qsend');
+  if (qb) {
+    e.stopPropagation();
+    if (qb.classList.contains('qsend')) { const inp = qb.parentElement.querySelector('.qin'); dispatchReply(qb, inp.value); inp.value=''; }
+    else dispatchReply(qb, qb.dataset.text);
+    return;
+  }
+  if (e.target.closest('.ctrl')) return;       // clicks in the reply area shouldn't open the modal
+  const card = e.target.closest('.card');
+  if (card && IS_AGENT) openCLI(card.dataset.id);
+});
+// broadcast bar
+const bcastEl = document.getElementById('bcast');
+bcastEl.addEventListener('click', e=>{
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.id === 'bsend') { const i=document.getElementById('binput'); replyAll(i.value); i.value=''; }
+  else if (b.dataset.all != null) replyAll(b.dataset.all);
+});
+const binputEl = document.getElementById('binput');   // agent-only; fleet replaces this bar
+if (binputEl) binputEl.addEventListener('keydown', e=>{
+  if (e.key === 'Enter') { replyAll(e.target.value); e.target.value=''; }
+});
+boardEl.addEventListener('keydown', e=>{
+  if (e.target.classList && e.target.classList.contains('qin') && e.key==='Enter') {
+    dispatchReply(e.target, e.target.value); e.target.value=''; e.stopPropagation();
+  }
+});
+document.getElementById('scrim').addEventListener('click', e=>{ if(e.target.id==='scrim') closeModal(); });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeModal(); });
+
+load();
+setInterval(load, 4000);
+</script>
+</body>
+</html>
