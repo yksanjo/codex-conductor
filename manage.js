@@ -1,31 +1,26 @@
 'use strict';
 
-// Conductor control plane — launch and steer Claude Code windows that run inside tmux.
-// A plain-terminal Claude TUI can't have input injected (macOS removed TIOCSTI), so the
-// only reliable channel is tmux send-keys. Conductor therefore "manages" windows it
-// launches into a dedicated tmux session ("conductor"), one window per label. It records
-// each window's transcript sessionId so the cockpit can attach reply buttons to the right
-// card. All tmux calls use arg arrays; on the REPLY path text rides send-keys -l (literal,
-// never interpolated). The LAUNCH path is the one place a command line is typed into a
-// shell — run() shell-quotes each arg before sending it.
+// Codex Conductor control plane — launch and steer Codex windows that run inside tmux.
+// A plain terminal UI cannot have input injected reliably, so managed windows use tmux
+// send-keys. One tmux session holds one window per label. All tmux calls use arg arrays;
+// reply text rides send-keys -l (literal, never interpolated). The launch path is the one
+// place a command line is typed into a shell, so run() shell-quotes each arg first.
 
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { spawnSync } = require('child_process');
-const { DEFAULT_ADAPTER, CLI_NAME } = require('./config');
+const { CLI_NAME } = require('./config');
 
 const HOME = os.homedir();
-const IS_CODEX = DEFAULT_ADAPTER === 'codex-code';
-const AGENT_CMD = process.env.CONDUCTOR_AGENT_CMD || (IS_CODEX ? 'codex' : 'claude');
-const REG_DIR = process.env.CONDUCTOR_STATE_DIR || path.join(HOME, IS_CODEX ? '.codex-conductor' : '.conductor');
+const AGENT_CMD = process.env.CONDUCTOR_AGENT_CMD || 'codex';
+const REG_DIR = process.env.CONDUCTOR_STATE_DIR || path.join(HOME, '.codex-conductor');
 const REG_FILE = path.join(REG_DIR, 'managed.json');
 const CODEX_DIR = process.env.CODEX_HOME || path.join(HOME, '.codex');
 const CODEX_SESSIONS_DIR = process.env.CODEX_SESSIONS_DIR || path.join(CODEX_DIR, 'sessions');
-const PROJECTS_DIR = IS_CODEX ? CODEX_SESSIONS_DIR : path.join(HOME, '.claude', 'projects');
 // tmux session that holds all managed windows. Env-overridable so tests can run against a
 // throwaway session instead of the user's real one.
-const SESSION = process.env.CONDUCTOR_TMUX_SESSION || (IS_CODEX ? 'codex-conductor' : 'conductor');
+const SESSION = process.env.CONDUCTOR_TMUX_SESSION || 'codex-conductor';
 
 function tmux(args, opts = {}) {
   const r = spawnSync('tmux', args, { encoding: 'utf8', ...opts });
@@ -46,10 +41,8 @@ function saveReg(reg) {
   fs.writeFileSync(REG_FILE, JSON.stringify(reg, null, 2));
 }
 
-// Claude Code names a transcript dir by replacing EVERY non-alphanumeric code unit of the cwd
-// with '-' (runs not collapsed) — not just slashes. A '/'-only transform silently loses any window
-// whose cwd contains '.', '_', a space, or non-ASCII.
-function folderFor(cwd) { return path.join(PROJECTS_DIR, cwd.replace(/[^A-Za-z0-9]/g, '-')); }
+// Codex stores transcripts by date, so managed-window session resolution searches the Codex
+// session tree and matches by cwd plus creation time.
 function findJsonl(dir, out = []) {
   let entries;
   try { entries = fs.readdirSync(dir, { withFileTypes: true }); }
@@ -86,9 +79,7 @@ function codexTranscripts(cwd) {
     .filter((x) => !cwd || !x.cwd || x.cwd === cwd);
 }
 function jsonlSet(cwd) {
-  if (IS_CODEX) return new Set(codexTranscripts(cwd).map((x) => x.id));
-  try { return new Set(fs.readdirSync(folderFor(cwd)).filter((f) => f.endsWith('.jsonl'))); }
-  catch { return new Set(); }
+  return new Set(codexTranscripts(cwd).map((x) => x.id));
 }
 
 // Synchronous sleep without spawning a process — deliver()/sayAll() settle for CONFIRM_MS on the
@@ -110,7 +101,7 @@ function windowAlive(label) {
 }
 
 // Launch a new managed window running the product agent in tmux, capture its sessionId.
-function run(label, claudeArgs, cwd, opts = {}) {
+function run(label, agentArgs, cwd, opts = {}) {
   if (!hasTmux()) return { ok: false, error: 'tmux is not installed (brew install tmux).' };
   const name = sanitize(label);
   cwd = cwd || process.cwd();
@@ -131,12 +122,11 @@ function run(label, claudeArgs, cwd, opts = {}) {
   // Start the program inside the pane (typed into the shell so it stays visible — the one path
   // where text meets a shell, so every arg is quoted). opts.cmd defaults to the product agent —
   // overridable for tests / launching other CLIs.
-  const cmd = [opts.cmd || AGENT_CMD, ...(claudeArgs || []).map(shq)].join(' ');
+  const cmd = [opts.cmd || AGENT_CMD, ...(agentArgs || []).map(shq)].join(' ');
   tmux(['send-keys', '-t', target(name), '-l', '--', cmd]);
   tmux(['send-keys', '-t', target(name), 'Enter']);
 
-  // Capture the new transcript sessionId (claude writes a fresh .jsonl on start) and
-  // auto-answer the "trust this folder?" prompt along the way. Skipped when
+  // Capture the new transcript sessionId and auto-answer startup prompts along the way. Skipped when
   // opts.capture === false (e.g. the web server, which must not block) — the server
   // schedules trust separately, and listManaged() lazily resolves the sessionId.
   let sessionId = null;
@@ -155,16 +145,13 @@ function run(label, claudeArgs, cwd, opts = {}) {
   return { ok: true, label: name, target: target(name), sessionId, attach: attachCommand(name) };
 }
 
-// Adopt an existing session: re-open it in a managed tmux window by forking its history
-// (claude --resume <id> --fork-session). Forking avoids two live clients on one session id,
-// so the user's old tab can stay open until they close it. Returns run()'s result (the new,
-// forked sessionId is captured by polling, like a fresh launch).
+// Adopt an existing session: re-open it in a managed tmux window with `codex resume <id>`.
 function adopt(label, sessionId, cwd, opts) {
   if (!sessionId) return { ok: false, error: 'no sessionId to adopt' };
   // Record which session this window was forked from so managedBySession() can flag the
   // ORIGINAL card as managed (the fork gets a brand-new sessionId, so without this the card
   // you clicked never flips and every later click re-adopts).
-  const args = IS_CODEX ? ['resume', sessionId] : ['--resume', sessionId, '--fork-session'];
+  const args = ['resume', sessionId];
   return run(label, args, cwd, { ...opts, adoptedFrom: sessionId });
 }
 
@@ -184,7 +171,7 @@ function uniqueLabel(base, sessionId) {
 // with Enter. Only sends Enter when the prompt is actually showing, so it can't fire a
 // stray keystroke into an already-trusted session.
 //
-// Claude's prompts/menus/footer always render in the bottom rows of the pane. Match against
+// Codex prompts/menus/footer render in the bottom rows of the pane. Match against
 // only the last N lines, never the whole scrollback — otherwise a session whose visible
 // TRANSCRIPT merely *discusses* "trust this folder" (e.g. a window reviewing this code) would
 // be misread as sitting at the trust prompt, and we'd fire a stray Enter into a live turn.
@@ -197,7 +184,7 @@ function answerTrust(label) { return key(label, 'Enter'); }
 
 // Classify what a managed window is showing, so the caller can drive it from boot to ready.
 //   trust  = the folder-trust safety prompt (accept with Enter → default "Yes")
-//   resume = the `--resume --fork-session` picker that large/old sessions show
+//   resume = a resume picker that large/old sessions can show
 //            ("Resume from summary / full session as-is / don't ask"). Recently-active cards
 //            are exactly these large sessions — the old trust-only handler never answered this
 //            menu, so adopting hung here and the reply was typed into it.
@@ -205,11 +192,11 @@ function answerTrust(label) { return key(label, 'Enter'); }
 //            text lands as a menu SELECTION, not a reply — so this used to fall through to
 //            busy (or worse, ready) and a reply got eaten by the menu.
 //   busy   = booting, loading history, or compacting — not safe to type into yet
-//   running= a turn is in progress ("esc to interrupt"). The input box may look empty (Claude lets
+//   running= a turn is in progress ("esc to interrupt"). The input box may look empty (Codex lets
 //            you QUEUE a line), but the contract for "ready" is "will accept a reply now", and
 //            confirmDelivery reads the same "esc to interrupt" marker as "a turn is running" — so
 //            classifying a running turn as ready made the two disagree. Treated as not-ready.
-//   ready  = Claude's prompt box is up and idle; a reply starts a fresh turn
+//   ready  = Codex's prompt box is up and idle; a reply starts a fresh turn
 //   gone   = the window/pane no longer exists
 // Pure classifier (testable without a live pane): given the bottom rows of a captured pane,
 // return its stage. paneStage() is the live wrapper that captures + tails + calls this.
@@ -269,7 +256,7 @@ function sendIfReady(label, text) {
 
 // Phase 2: read the pane back and upgrade a 'pending' record to 'started' (the turn is visibly
 // running) or 'sent' (delivered to a ready prompt; a fast turn may already be done). We deliberately
-// do NOT try to detect "text still sitting in the input box" — Claude echoes the submitted message
+// do NOT try to detect "text still sitting in the input box" — the TUI echoes submitted messages
 // into the transcript with a '>' prefix, indistinguishable from an unsent input line, so that check
 // only produced false "unverified" alarms on prompts that were actually accepted.
 function confirmDelivery(rec) {
@@ -298,7 +285,7 @@ function deliver(label, text) {
 // Broadcast one reply (or key) to every managed window at once. Text broadcasts fire into every
 // ready window first, then settle ONCE before confirming — so the result carries a per-window
 // breakdown the cockpit renders as status chips, without the count that used to lie (tmux exit 0 ≠
-// Claude accepted the prompt) and without an O(n) stack of confirm delays. Key broadcasts
+// Codex accepted the prompt) and without an O(n) stack of confirm delays. Key broadcasts
 // (interrupt/panic) are intentional control signals and fire into every pane regardless of stage.
 function sayAll(payload) {
   payload = payload || {};
@@ -413,7 +400,7 @@ function stop(label) {
     : { ok: false, label: name, error: r.err || `no live managed window "${name}"` };
 }
 
-// Late-bind a window's sessionId: claude only writes a transcript once you send the first
+// Late-bind a window's sessionId: Codex may only write a transcript once you send the first
 // prompt (not at launch / trust prompt), so run()'s capture often misses it.
 //
 // N windows launched into ONE cwd at ~one instant used to all bind to the *newest* .jsonl in
@@ -424,24 +411,11 @@ function stop(label) {
 // earlier transcripts first, so N windows map to N distinct sessions.
 function resolveSession(w, claimed) {
   if (w.sessionId) return w.sessionId;
-  if (IS_CODEX) {
-    const files = codexTranscripts(w.cwd)
-      .filter((x) => x.m >= (w.created || 0) - 1500)
-      .filter((x) => !claimed || !claimed.has(x.id))
-      .sort((a, b) => a.m - b.m);
-    return files.length ? files[0].id : null;
-  }
-  try {
-    const dir = folderFor(w.cwd);
-    const files = fs.readdirSync(dir)
-      .filter((f) => f.endsWith('.jsonl'))
-      .map((f) => ({ id: f.replace(/\.jsonl$/, ''), m: fs.statSync(path.join(dir, f)).mtimeMs }))
-      .filter((x) => x.m >= (w.created || 0) - 1500)
-      .filter((x) => !claimed || !claimed.has(x.id))
-      .sort((a, b) => a.m - b.m);
-    if (files.length) return files[0].id;
-  } catch { /* ignore */ }
-  return null;
+  const files = codexTranscripts(w.cwd)
+    .filter((x) => x.m >= (w.created || 0) - 1500)
+    .filter((x) => !claimed || !claimed.has(x.id))
+    .sort((a, b) => a.m - b.m);
+  return files.length ? files[0].id : null;
 }
 
 // All managed windows, with liveness. Prunes dead ones; late-binds missing sessionIds.

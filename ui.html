@@ -125,8 +125,6 @@
   .qb:hover { background:rgba(169,116,255,.18); border-color:var(--accent); }
   .qb.danger { color:#ff8a96; border-color:rgba(255,90,106,.4); }
   .qb.danger:hover { background:rgba(255,90,106,.18); border-color:#ff5a6a; }
-  .bcast.fleet { background:linear-gradient(120deg,rgba(255,90,106,.12),rgba(245,177,63,.06)); border-color:rgba(255,90,106,.32); }
-  .bcast.fleet .blabel b, .bcast.fleet .blabel { color:#ff8a96; }
   .qrow { display:flex; gap:5px; }
   .qin { flex:1; min-width:0; font:inherit; font-size:11.5px; color:var(--txt); background:rgba(0,0,0,.25); border:1px solid var(--line); border-radius:7px; padding:5px 9px; }
   .qin:focus { outline:none; border-color:var(--accent); }
@@ -206,7 +204,6 @@
 <script>
 const ADAPTER = '__ADAPTER__';
 let META = __META__;                 // { adapter, statuses:[{key,title,word,color}], capabilities }
-const IS_AGENT = ADAPTER === 'claude-code' || ADAPTER === 'codex-code';
 let WINDOW = '60';
 let DATA = [];
 let lastHash = '';
@@ -246,7 +243,7 @@ function typingNow() {
 async function load() {
   const q = WINDOW==='all' ? 'all=1' : 'minutes='+WINDOW;
   try {
-    const r = await fetch('/api/sessions?adapter='+encodeURIComponent(ADAPTER)+'&'+q);
+    const r = await fetch('/api/sessions?'+q);
     const j = await r.json();
     DATA = j.sessions;
     if (j.statuses) META = { adapter:j.adapter, statuses:j.statuses, capabilities:j.capabilities, destructive:j.destructive||[], broadcastUi:j.broadcastUi||null };
@@ -261,7 +258,7 @@ async function load() {
 }
 
 function updateInPlace() {
-  const unit = IS_AGENT ? 'session' : 'bot';
+  const unit = 'session';
   document.getElementById('count').textContent = DATA.length ? DATA.length+' '+unit+(DATA.length>1?'s':'') : '';
   const bc = document.getElementById('bcount'); if (bc) bc.textContent = DATA.filter(s=>s.managed).length;
   for (const s of DATA) {
@@ -291,9 +288,9 @@ function ctrlHTML(s) {
 }
 
 function cardHTML(s) {
-  return IS_AGENT ? claudeCard(s) : fleetCard(s);
+  return sessionCard(s);
 }
-function claudeCard(s) {
+function sessionCard(s) {
   const sm = statusMeta(s.status);
   return `<div class="card ${s.status}" data-id="${s.sessionId}" style="--c:${sm.color}">
       ${s.managed ? '<button class="xclose" data-close="'+esc(s.mlabel)+'" title="Close this window (kills its tmux session — irreversible)">✕</button>' : ''}
@@ -308,35 +305,6 @@ function claudeCard(s) {
       ${ctrlHTML(s)}
     </div>`;
 }
-// Human labels for control commands across every fleet adapter (trading bot / mev / validator).
-const CMD_LABEL = {
-  pause:'⏸ Pause', resume:'▶ Resume', flatten:'🛑 Flatten', kill:'⛔ Kill', unwind:'🧹 Unwind',
-  restart:'🔁 Restart', catchup:'⏩ Catch up', 'topup-identity':'💧 Top up', drain:'🚰 Drain',
-};
-// Fleet card: read-only observation + opt-in per-unit control. Buttons are generated from the
-// adapter's advertised capabilities; ones in META.destructive get the danger style and are
-// double-confirmed in fleetControl(). set-param needs a value, so it's driven via API, not a button.
-function fleetCard(s) {
-  const sm = statusMeta(s.status);
-  const chips = (s.context||[]).map(c=>'<span class="chip">'+esc(c)+'</span>').join('');
-  const caps = META.capabilities || [];
-  const danger = new Set(META.destructive || []);
-  const btns = caps.filter(c=>CMD_LABEL[c]).map(cmd=>{
-    const cls = danger.has(cmd) ? ' danger' : '';
-    return '<button class="qb'+cls+'" data-bot="'+esc(s.id)+'" data-cmd="'+esc(cmd)+'">'+CMD_LABEL[cmd]+'</button>';
-  }).join('');
-  return `<div class="card ${s.status}" data-id="${esc(s.id)}" style="--c:${sm.color}">
-      <div class="ctop">
-        <span class="pill" style="--c:${sm.color}"><i></i>${statusLabel(s.status)}</span>
-        <span class="time">${esc(s.lastActiveRel)}</span>
-      </div>
-      <div class="label">${esc(s.title || s.label)}</div>
-      <div class="task">${esc(s.lastAction || s.intent || '—')}</div>
-      <div class="cfoot">${chips}</div>
-      ${btns ? '<div class="ctrl"><div class="qbtns">'+btns+'</div></div>' : ''}
-    </div>`;
-}
-
 let toastT;
 function toast(msg) {
   const t = document.getElementById('toast');
@@ -415,66 +383,13 @@ async function openCLI(id) {
     else toast('open failed: '+(j.error||'?'));
   } catch(e) { toast('open failed'); }
 }
-// --- fleet control: per-unit command + desk-wide broadcast --------------------------------
-async function fleetControl(bot, cmd) {
-  let confirmTok;
-  if ((META.destructive||[]).includes(cmd)) {
-    if (!confirm((CMD_LABEL[cmd]||cmd)+' '+bot+'?\n\nThis is a destructive command and cannot be undone.')) return;
-    confirmTok = cmd;
-  }
-  try {
-    const r = await fetch('/api/control', { method:'POST', headers:{'content-type':'application/json','x-conductor':'1'},
-      body:JSON.stringify({ adapter:ADAPTER, target:bot, command:{cmd}, confirm:confirmTok }) });
-    const j = await r.json();
-    toast(j.ok ? '→ '+cmd+' → '+bot : (cmd+' failed: '+(j.error||'?')));
-  } catch(e) { toast(cmd+' failed'); }
-}
-// Desk-wide broadcast, driven by the adapter's broadcastUi hint. Dangerous broadcasts (fleet
-// flatten-all) double-confirm; benign ones (mev pause-all, validator report-all) confirm once.
-// Always carries a confirm token (the server treats every broadcast as confirm-gated).
-async function deskBroadcast(cmd, danger) {
-  if (danger) {
-    if (!confirm('⚠ Broadcast '+cmd+' to the ENTIRE fleet?\nEvery unit gets the command.')) return;
-    if (!confirm('Are you absolutely sure? This affects ALL units.')) return;
-  } else {
-    if (!confirm('Broadcast '+cmd+' to every unit?')) return;
-  }
-  try {
-    const r = await fetch('/api/broadcast', { method:'POST', headers:{'content-type':'application/json','x-conductor':'1'},
-      body:JSON.stringify({ adapter:ADAPTER, command:{cmd}, confirm:cmd }) });
-    const j = await r.json();
-    if (!j.ok) { toast(cmd+' failed: '+(j.error||'?')); return; }
-    if (j.report) toast('🔄 report → '+(j.units?j.units.length:0)+' units');
-    else toast('→ '+cmd+' sent to '+(j.sent||0)+'/'+(j.total||0)+' units');
-  } catch(e) { toast(cmd+' failed'); }
-}
-
-// Adapt the header + broadcast bar to the active adapter. Codex/Claude keep the "prompt all managed"
-// bar + New-window button; fleet replaces them with a desk-wide panic-flatten band.
+// Adapt the header and broadcast bar to the active Codex status vocabulary.
 function setupChrome() {
-  const ck = document.querySelector('.ck'); if (ck) ck.textContent = IS_AGENT ? 'Cockpit' : 'Fleet';
+  const ck = document.querySelector('.ck'); if (ck) ck.textContent = 'Cockpit';
   const legend = document.querySelector('.legend');
   if (legend) legend.innerHTML = (META.statuses||[]).filter(s=>s.key!=='idle')
     .map(s=>'<span><i style="background:'+s.color+'"></i>'+esc(s.word)+'</span>').join('');
-  if (!IS_AGENT) {
-    const nb = document.getElementById('newbtn'); if (nb) nb.style.display='none';
-    const sb = document.getElementById('seatbtn'); if (sb) sb.style.display='none';
-    const bc = document.getElementById('bcast');
-    const ui = META.broadcastUi;
-    if (ui) {
-      if (ui.danger) bc.classList.add('fleet');
-      bc.innerHTML = '<span class="blabel">'+(ui.danger?'🛑':'⚡')+' Desk-wide</span>'
-        + '<div class="bbtns"><button class="qb'+(ui.danger?' danger':'')+'" id="deskBtn">'+esc(ui.label)+'</button></div>'
-        + '<span style="color:var(--dim);font-size:11px">read-only observation · opt-in control</span>';
-      bc.style.display = 'flex';
-      document.getElementById('deskBtn').addEventListener('click', ()=>deskBroadcast(ui.cmd, !!ui.danger));
-    } else {
-      bc.style.display = 'none';
-    }
-  } else {
-    // build agent broadcast quick-buttons once
-    document.getElementById('bbtns').innerHTML = QUICK.map(q => '<button class="qb" data-all="'+esc(q[1])+'">'+q[0]+'</button>').join('');
-  }
+  document.getElementById('bbtns').innerHTML = QUICK.map(q => '<button class="qb" data-all="'+esc(q[1])+'">'+q[0]+'</button>').join('');
 }
 setupChrome();
 
@@ -482,7 +397,7 @@ function openLauncher() {
   document.getElementById('modal').innerHTML = `
     <button class="close" onclick="closeModal()">×</button>
     <h2>New managed window</h2>
-    <div class="sub">launches ${ADAPTER==='codex-code' ? 'Codex' : 'Claude'} in a tmux window you can drive from this dashboard</div>
+    <div class="sub">launches Codex in a tmux window you can drive from this dashboard</div>
     <div class="kv"><div class="k">Name</div><input class="qin" id="newlabel" placeholder="e.g. soag, research, fix-bug"></div>
     <div class="kv"><div class="k">Folder</div><input class="qin" id="newcwd" placeholder="~ (home) — or a path like ~/soag-grid"></div>
     <div class="kv"><button class="qsend" style="padding:8px 18px" onclick="launchWin()">Launch ▸</button></div>
@@ -632,13 +547,11 @@ function showCredential(j, sessionId){
 function render() {
   const board = document.getElementById('board');
   const empty = document.getElementById('empty');
-  const unit = IS_AGENT ? 'session' : 'bot';
+  const unit = 'session';
   document.getElementById('count').textContent = DATA.length ? DATA.length+' '+unit+(DATA.length>1?'s':'') : '';
-  if (IS_AGENT) {
-    const mc = DATA.filter(s=>s.managed).length;
-    document.getElementById('bcount').textContent = mc;
-    document.getElementById('bcast').style.display = mc ? 'flex' : 'none';
-  }
+  const mc = DATA.filter(s=>s.managed).length;
+  document.getElementById('bcount').textContent = mc;
+  document.getElementById('bcast').style.display = mc ? 'flex' : 'none';
   if (!DATA.length) {
     board.innerHTML=''; empty.style.display='block';
     empty.textContent = 'No sessions in this window. Try a wider range →';
@@ -671,8 +584,6 @@ function dispatchReply(el, text) {
   else if (el.dataset.session != null) replyAdopt(el.dataset.session, text); // plain → adopt + send
 }
 boardEl.addEventListener('click', e=>{
-  const fb = e.target.closest('[data-cmd]');                 // fleet control button
-  if (fb) { e.stopPropagation(); fleetControl(fb.dataset.bot, fb.dataset.cmd); return; }
   const sh = e.target.closest('.bshare');
   if (sh) { e.stopPropagation(); openExpose(sh.dataset.share, sh.dataset.label); return; }
   const ob = e.target.closest('.bopen');
@@ -688,7 +599,7 @@ boardEl.addEventListener('click', e=>{
   }
   if (e.target.closest('.ctrl')) return;       // clicks in the reply area shouldn't open the modal
   const card = e.target.closest('.card');
-  if (card && IS_AGENT) openCLI(card.dataset.id);
+  if (card) openCLI(card.dataset.id);
 });
 // broadcast bar
 const bcastEl = document.getElementById('bcast');
@@ -697,7 +608,7 @@ bcastEl.addEventListener('click', e=>{
   if (b.id === 'bsend') { const i=document.getElementById('binput'); replyAll(i.value); i.value=''; }
   else if (b.dataset.all != null) replyAll(b.dataset.all);
 });
-const binputEl = document.getElementById('binput');   // agent-only; fleet replaces this bar
+const binputEl = document.getElementById('binput');
 if (binputEl) binputEl.addEventListener('keydown', e=>{
   if (e.key === 'Enter') { replyAll(e.target.value); e.target.value=''; }
 });

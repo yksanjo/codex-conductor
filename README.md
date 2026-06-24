@@ -1,6 +1,6 @@
 # Codex Conductor
 
-Codex Conductor is a Codex-first fork of Conductor: a local cockpit, CLI, and MCP server for watching your Codex sessions across projects.
+Codex Conductor is a local cockpit, CLI, and MCP server for watching your Codex sessions across projects.
 
 It reads the local Codex transcript trail under `~/.codex/sessions/`, joins it with `~/.codex/session_index.jsonl` when available, and turns scattered runs into a status board grouped by working, open, recent, and idle sessions.
 
@@ -13,8 +13,6 @@ Codex already stores local transcripts so you can resume work later. Codex Condu
 - `codex-conductor mcp` lets an MCP-aware agent ask what is active, what is blocked, and what is left.
 - Managed tmux windows let you launch or drive Codex sessions from one board.
 - The irreversibility gate refuses unattended deploy, send, delete, and spend approvals.
-
-The original Conductor adapters are still included. Codex is the default; use `--adapter claude-code`, `--adapter fleet`, `--adapter mev-searcher`, `--adapter validator-fleet`, or `--adapter sales` when you want the older views.
 
 ## Install
 
@@ -103,23 +101,13 @@ command = "node"
 args = ["/Users/you/codex-conductor/mcp.js"]
 ```
 
-## Compatibility Adapters
-
-Codex is the product default, but the source-agnostic Conductor engine remains:
-
-```bash
-codex-conductor --adapter claude-code
-codex-conductor up --adapter fleet
-codex-conductor --adapter validator-fleet --json
-```
-
 ## Development
 
 ```bash
 npm test
 ```
 
-The test suite includes a temporary Codex transcript fixture plus the original Conductor adapter tests.
+The test suite builds a temporary Codex transcript fixture and verifies the Codex-first CLI path plus the irreversibility gate.
 
 ## License
 

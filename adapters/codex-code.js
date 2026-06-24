@@ -4,8 +4,7 @@
 //
 // Codex writes session transcripts under ~/.codex/sessions/YYYY/MM/DD/*.jsonl and keeps a
 // thread-name index at ~/.codex/session_index.jsonl. This adapter is read-first: it maps Codex's
-// rollout event stream onto Conductor's normalized row model without assuming Claude's transcript
-// layout.
+// rollout event stream onto Codex Conductor's normalized row model.
 
 const fs = require('fs');
 const path = require('path');

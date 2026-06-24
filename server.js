@@ -15,7 +15,6 @@ const os = require('os');
 const fs = require('fs');
 const path = require('path');
 const { execFile } = require('child_process');
-const { collectSessions } = require('./lib');
 const engine = require('./engine');
 const manage = require('./manage');
 const seat = require('./seat');
@@ -25,22 +24,16 @@ let MANUAL = '<!doctype html><title>Codex Conductor manual</title><body style="f
 try { MANUAL = fs.readFileSync(path.join(__dirname, 'docs', 'manual.html'), 'utf8'); } catch { /* ignore */ }
 
 function parseArgs(argv) {
-  const a = { port: parseInt(process.env.CONDUCTOR_PORT, 10) || 7591, open: true, adapter: DEFAULT_ADAPTER };
+  const a = { port: parseInt(process.env.CONDUCTOR_PORT, 10) || 7591, open: true };
   for (let i = 2; i < argv.length; i++) {
     const v = argv[i];
     if (v === '--port') a.port = parseInt(argv[++i], 10) || a.port;
     else if (v === '--no-open') a.open = false;
-    else if (v === '--adapter') a.adapter = String(argv[++i] || DEFAULT_ADAPTER);
   }
   return a;
 }
 
-// The adapter this cockpit serves (set at boot from --adapter). claude-code keeps its rich
-// tmux control plane + existing endpoints; other adapters (e.g. fleet) route through the generic
-// engine + adapter.control. Validated against the same whitelist the engine uses.
 let ADAPTER_NAME = DEFAULT_ADAPTER;
-// A load failure must not silently flip the cockpit to claude-code mid-flight: remember the
-// error, shout once on stderr, and surface it via /api/meta so the UI/operator can see why.
 let lastAdapterError = null;
 function activeAdapter() {
   try { return engine.loadAdapter(ADAPTER_NAME); }
@@ -56,18 +49,10 @@ function colorHex(name) {
 function adapterMeta() {
   const a = activeAdapter();
   const statuses = (a.statuses || engine.DEFAULT_STATUSES).map((s) => ({ key: s.key, title: s.title, word: s.word, color: colorHex(s.color) }));
-  const capabilities = (a.control && a.control.capabilities) || [];
-  const destructive = (a.control && a.control.destructive) ? Array.from(a.control.destructive) : [];
-  const broadcastUi = (a.control && a.control.broadcastUi) || null;
-  return { adapter: ADAPTER_NAME, statuses, capabilities, destructive, broadcastUi, lastAdapterError };
-}
-function isAgentAdapter() {
-  return ADAPTER_NAME === 'claude-code' || ADAPTER_NAME === 'codex-code';
+  return { adapter: ADAPTER_NAME, statuses, capabilities: [], destructive: [], broadcastUi: null, lastAdapterError };
 }
 async function collectAgentRows(opts) {
-  return ADAPTER_NAME === 'claude-code'
-    ? collectSessions(opts)
-    : engine.collect(activeAdapter(), opts);
+  return engine.collect(activeAdapter(), opts);
 }
 
 // The cockpit page lives in ui.html (HTML+CSS+client JS), loaded once at boot like MANUAL
@@ -97,7 +82,7 @@ function readBody(req, res, cb) {
 }
 
 // CSRF + DNS-rebinding guard for state-changing (POST) requests. The control endpoints
-// inject keystrokes into live Claude windows, so a malicious page in the same browser must
+// inject keystrokes into live Codex windows, so a malicious page in the same browser must
 // not be able to fire them. Three checks; any one largely closes it, we require all:
 //  - Host must be localhost/127.0.0.1 (defeats DNS rebinding)
 //  - Origin (when present) must be local (blocks cross-site form/fetch)
@@ -115,16 +100,6 @@ function localOrigin(req) {
 }
 function writeAllowed(req) {
   return localHost(req) && localOrigin(req) && req.headers['x-conductor'] === '1';
-}
-// Commands that move real money / state and must carry an explicit confirm token (the UI also
-// double-confirms). Each adapter declares its own destructive set (control.destructive); the
-// cockpit honors it as a second gate on top of the adapter's own check (defense in depth).
-// broadcast is always treated as destructive regardless of command.
-function destructiveSet(a) {
-  const d = a && a.control && a.control.destructive;
-  if (d instanceof Set) return d;
-  if (Array.isArray(d)) return new Set(d);
-  return new Set(['flatten']);   // legacy fallback
 }
 // Drive a freshly launched/adopted window from boot to "ready" and deliver the reply once the
 // prompt box is up. Shared with the MCP control tools — see manage.deliverAdopted.
@@ -148,18 +123,14 @@ async function handle(req, res) {
     const meta = adapterMeta();
     try {
       let rows;
-      if (isAgentAdapter()) {
-        rows = await collectAgentRows({ minutes, all });
-        const mgd = manage.managedBySession();         // sessionId -> managed window
-        const vis = seat.visibilityMap();               // sessionId -> [{seatId, seatLabel, mode}]
-        for (const r of rows) {
-          const w = mgd[r.sessionId];
-          if (w) { r.managed = true; r.mlabel = w.label; }
-          const v = vis[r.sessionId];                    // which copilot seats can see this card
-          if (v && v.length) r.seatVisibility = v;
-        }
-      } else {
-        rows = await engine.collect(activeAdapter(), { minutes, all });
+      rows = await collectAgentRows({ minutes, all });
+      const mgd = manage.managedBySession();         // sessionId -> managed window
+      const vis = seat.visibilityMap();              // sessionId -> [{seatId, seatLabel, mode}]
+      for (const r of rows) {
+        const w = mgd[r.sessionId];
+        if (w) { r.managed = true; r.mlabel = w.label; }
+        const v = vis[r.sessionId];
+        if (v && v.length) r.seatVisibility = v;
       }
       res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
       res.end(JSON.stringify({ generatedAt: new Date().toISOString(), adapter: meta.adapter, statuses: meta.statuses, capabilities: meta.capabilities, destructive: meta.destructive, broadcastUi: meta.broadcastUi, count: rows.length, sessions: rows }));
@@ -207,45 +178,6 @@ async function handle(req, res) {
         }
         return sendJSON(res, 400, { ok: false, error: 'unknown action (create|grant|revoke)' });
       } catch (e) { sendJSON(res, 400, { ok: false, error: e.message }); }
-    });
-    return;
-  }
-
-  // Generic per-unit control (used by non-claude adapters, e.g. fleet pause/resume/flatten).
-  // Destructive commands (flatten) require an explicit confirm token in the body.
-  if (url.pathname === '/api/control' && req.method === 'POST') {
-    readBody(req, res, (p) => {
-      const a = activeAdapter();
-      if (!a.control || typeof a.control.send !== 'function') return sendJSON(res, 400, { ok: false, error: 'adapter has no control plane' });
-      const command = p.command || {};
-      if (!a.control.capabilities.includes(command.cmd)) return sendJSON(res, 400, { ok: false, error: 'unknown command' });
-      if (destructiveSet(a).has(command.cmd) && p.confirm !== command.cmd) {
-        return sendJSON(res, 400, { ok: false, error: `"${command.cmd}" is destructive — confirm token required` });
-      }
-      // Forward the validated token so an adapter that gates this command (validator gates every
-      // capability; mev gates unwind) sees the confirm it requires.
-      try { sendJSON(res, 200, a.control.send(p.target, p.confirm ? { ...command, confirm: p.confirm } : command)); }
-      catch (e) { sendJSON(res, 400, { ok: false, error: e.message }); }
-    });
-    return;
-  }
-
-  // Desk-wide broadcast (e.g. the panic flatten). Always destructive → confirm token required.
-  if (url.pathname === '/api/broadcast' && req.method === 'POST') {
-    readBody(req, res, (p) => {
-      const a = activeAdapter();
-      if (!a.control || typeof a.control.broadcast !== 'function') return sendJSON(res, 400, { ok: false, error: 'adapter has no broadcast' });
-      const command = p.command || {};
-      // The broadcast vocabulary isn't always a per-unit capability: a validator's only desk-wide
-      // op is the non-mutating "report", which is deliberately NOT a control capability. Accept a
-      // command that's either a capability or the adapter's advertised broadcastUi command; the
-      // adapter's own broadcast() is the final authority and refuses anything destructive.
-      const bcCmd = a.control.broadcastUi && a.control.broadcastUi.cmd;
-      if (!a.control.capabilities.includes(command.cmd) && command.cmd !== bcCmd) return sendJSON(res, 400, { ok: false, error: 'unknown command' });
-      if (p.confirm !== command.cmd) return sendJSON(res, 400, { ok: false, error: 'broadcast requires a confirm token' });
-      // Forward the validated token so the adapter's own destructive gate (defense in depth) passes.
-      try { sendJSON(res, 200, a.control.broadcast({ ...command, confirm: p.confirm })); }
-      catch (e) { sendJSON(res, 400, { ok: false, error: e.message }); }
     });
     return;
   }
@@ -370,8 +302,8 @@ function openBrowser(url) {
 
 function main() {
   const args = parseArgs(process.argv);
-  try { engine.loadAdapter(args.adapter); ADAPTER_NAME = args.adapter; }
-  catch (e) { console.error(`${CLI_NAME}: ${e.message} - falling back to ${DEFAULT_ADAPTER}`); ADAPTER_NAME = DEFAULT_ADAPTER; }
+  try { engine.loadAdapter(DEFAULT_ADAPTER); ADAPTER_NAME = DEFAULT_ADAPTER; }
+  catch (e) { console.error(`${CLI_NAME}: ${e.message}`); process.exit(1); }
   const url = `http://localhost:${args.port}`;
   const server = http.createServer(handle);
 

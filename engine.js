@@ -1,12 +1,11 @@
 'use strict';
 
-// Conductor engine — the source-agnostic supervisory core.
+// Codex Conductor engine — the supervisory core.
 //
-// Conductor is supervisory awareness over a fleet of semi-autonomous workers that already
-// emit an append-only activity trail. The engine knows NOTHING about Claude Code, trading
-// bots, or any specific domain. It consumes a pluggable ADAPTER and owns the cross-cutting
-// concerns: discovery orchestration, liveness application, grouping, status ranking, and
-// sorting. Rendering + control live in the surfaces (scan.js / server.js / mcp.js).
+// Codex sessions emit append-only activity trails. The engine consumes the Codex adapter
+// and owns cross-cutting concerns: discovery orchestration, liveness application,
+// grouping, status ranking, and sorting. Rendering + control live in the surfaces
+// (scan.js / server.js / mcp.js).
 //
 // An adapter (adapters/<name>.js) owns where trails live and how to read them:
 //   discover(opts)            -> array of trail handles (file paths, dirs, cursors)
@@ -59,8 +58,8 @@ async function collect(adapter, opts = {}) {
     catch { liveSet = new Set(); }
   }
 
-  // Parse each handle into a record, bounding concurrency so a heavy fleet can't open thousands
-  // of file descriptors at once. Keep the handle paired with its record for liveness lookup.
+  // Parse each handle into a record, bounding concurrency so a large history can't open
+  // thousands of file descriptors at once. Keep the handle paired with its record for liveness lookup.
   const pairs = await mapLimit(handles, opts.concurrency || 24, async (h) => {
     let rec = null;
     try { rec = await adapter.parse(h, opts); } catch { rec = null; }

@@ -51,7 +51,7 @@ function run(args) {
 console.log('codex-conductor tests:');
 
 const json = JSON.parse(run(['--json', '--minutes', '60']));
-ok('defaults to the codex-code adapter', json.adapter === 'codex-code');
+ok('defaults to the Codex source', json.source === 'codex');
 ok('finds the fake Codex session', json.count === 1 && json.sessions[0].sessionId === sid);
 ok('uses session_index thread name as the task/title', json.sessions[0].task === 'Build Codex monitor');
 ok('labels the project from cwd basename', json.sessions[0].label === 'Codex App');

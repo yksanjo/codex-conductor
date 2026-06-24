@@ -5,6 +5,14 @@
     "access": "public"
   },
   "description": "Codex-first cockpit and MCP server for local Codex sessions: read ~/.codex transcripts, group work by status, and drive managed tmux sessions behind an irreversibility gate.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yksanjo/codex-conductor.git"
+  },
+  "homepage": "https://github.com/yksanjo/codex-conductor#readme",
+  "bugs": {
+    "url": "https://github.com/yksanjo/codex-conductor/issues"
+  },
   "bin": {
     "codex-conductor": "cli.js",
     "codex-cockpit": "server.js",
@@ -18,7 +26,7 @@
     "mcp": "node mcp.js",
     "seat": "node seat-server.js",
     "seat-mcp": "node seat-mcp.js",
-    "test": "node codex.test.js && CONDUCTOR_DEFAULT_ADAPTER=claude-code node test.js && node policy.test.js && node fleet.test.js && node adapters/mev-searcher.test.js && node adapters/validator-fleet.test.js && node adapters/sales.test.js && CONDUCTOR_DEFAULT_ADAPTER=claude-code node mcp.test.js && CONDUCTOR_DEFAULT_ADAPTER=claude-code node manage.test.js && CONDUCTOR_DEFAULT_ADAPTER=claude-code node server.test.js && node server.fleet.test.js && CONDUCTOR_DEFAULT_ADAPTER=claude-code node seat.test.js && CONDUCTOR_DEFAULT_ADAPTER=claude-code node seat.e2e.test.js"
+    "test": "node codex.test.js && node policy.test.js && node --check cli.js && node --check scan.js && node --check server.js && node --check mcp.js && node --check manage.js && node --check drive.js && node --check seat.js && node --check seat-server.js && node --check seat-mcp.js"
   },
   "files": [
     "cli.js",
@@ -36,16 +44,8 @@
     "manage.js",
     "policy.js",
     "util.js",
-    "adapters/claude-code.js",
     "adapters/codex-code.js",
-    "adapters/fleet.js",
-    "adapters/mev-searcher.js",
-    "adapters/validator-fleet.js",
-    "adapters/sales.js",
-    "adapters/_filetrail.js",
     "skill/SKILL.md",
-    "docs/cockpit.png",
-    "docs/spec.png",
     "docs/orchestrator-prompt.md",
     "docs/manual.html",
     "README.md",
@@ -56,10 +56,14 @@
     "codex",
     "codex-cli",
     "codex-code",
+    "openai-codex",
+    "mcp",
+    "tmux",
+    "local-first",
+    "developer-tools",
     "cli",
-    "agents",
-    "orchestration",
-    "dashboard"
+    "dashboard",
+    "session-monitor"
   ],
   "license": "MIT",
   "engines": {

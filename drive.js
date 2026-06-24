@@ -10,16 +10,13 @@
 // Zero dependencies beyond the engine + control plane it already uses.
 
 const engine = require('./engine');
-const { collectSessions } = require('./lib');
 const manage = require('./manage');
 const { DEFAULT_ADAPTER } = require('./config');
 
 // Find one session row by sessionId, 8-char shortId, or friendly label (case-insensitive).
 async function findSession(ref, minutes = 4320) {
   const key = String(ref || '').toLowerCase();
-  const rows = DEFAULT_ADAPTER === 'claude-code'
-    ? await collectSessions({ minutes, all: false })
-    : await engine.collect(engine.loadAdapter(DEFAULT_ADAPTER), { minutes, all: false });
+  const rows = await engine.collect(engine.loadAdapter(DEFAULT_ADAPTER), { minutes, all: false });
   return rows.find((r) =>
     r.sessionId.toLowerCase() === key ||
     r.shortId.toLowerCase() === key ||

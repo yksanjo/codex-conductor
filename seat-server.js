@@ -105,7 +105,7 @@ async function handle(req, res) {
       cwd: sess.cwd, branch: sess.gitBranch, status: sess.status, lastActive: sess.lastActiveRel,
       mode: g.mode, canReply: g.mode === 'collaborate',
       goal: sess.intent || sess.task || sess.title, doingNow: sess.lastAction,
-      recent: (sess.recent || []).map((e) => `${e.actor === 'assistant' ? 'Claude' : (e.actor || 'you')}: ${e.summary}`),
+      recent: (sess.recent || []).map((e) => `${e.actor === 'assistant' ? 'agent' : (e.actor || 'you')}: ${e.summary}`),
     });
   }
 

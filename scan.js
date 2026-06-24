@@ -1,11 +1,9 @@
 #!/usr/bin/env node
 'use strict';
 
-// Conductor CLI — boxed, sectioned table (or JSON) of a worker fleet. Adapter-driven: the
-// sections come from the adapter's status vocabulary, not a hardcoded list. Read-only.
+// Codex Conductor CLI — boxed, sectioned table (or JSON) of local Codex sessions.
 //
 //   codex-conductor                    boxed table (Codex), active in last 10 min
-//   codex-conductor --adapter fleet    read the trading-bot fleet instead
 //   codex-conductor --minutes 60       widen the window
 //   codex-conductor --all              every unit, ignore the time filter
 //   codex-conductor --json             structured JSON
@@ -70,17 +68,13 @@ function render(rows, args, adapter) {
   const statuses = adapter.statuses || engine.DEFAULT_STATUSES;
   const statusMap = Object.fromEntries(statuses.map((s) => [s.key, s]));
   if (!rows.length) {
-    console.log(`\nNo ${args.adapter} units in the last ${args.minutes} min. Try: ${CLI_NAME} --adapter ${args.adapter} --all\n`);
+    console.log(`\nNo Codex sessions in the last ${args.minutes} min. Try: ${CLI_NAME} --all\n`);
     return;
   }
   const W = Math.min((process.stdout.columns || 80) - 1, 86);
-  const hint = args.adapter === 'fleet'
-    ? `cockpit: ${CLI_NAME} up --adapter fleet   ·   panic: broadcast-flatten in the cockpit`
-    : args.adapter === 'codex-code'
-      ? `cockpit: ${CLI_NAME} up   ·   control: ${CLI_NAME} run <label> / ${CLI_NAME} say <label> continue`
-      : `cockpit: ${CLI_NAME} up --adapter ${args.adapter}   ·   control: ${CLI_NAME} run <label> / ${CLI_NAME} say <label> yes`;
+  const hint = `cockpit: ${CLI_NAME} up   ·   control: ${CLI_NAME} run <label> / ${CLI_NAME} say <label> continue`;
   console.log('');
-  console.log(`${RAW.b}${PRODUCT_NAME}${RAW.r} ${RAW.dim}(${args.adapter})${RAW.r} — ${rows.length} unit${rows.length > 1 ? 's' : ''} ${RAW.dim}· last ${args.all ? 'all' : args.minutes + ' min'}${RAW.r}`);
+  console.log(`${RAW.b}${PRODUCT_NAME}${RAW.r} — ${rows.length} session${rows.length > 1 ? 's' : ''} ${RAW.dim}· last ${args.all ? 'all' : args.minutes + ' min'}${RAW.r}`);
   console.log(`${RAW.dim}   ${hint}${RAW.r}`);
 
   for (const s of statuses) {
@@ -96,7 +90,7 @@ async function main() {
   const args = parseArgs(process.argv);
   if (args.help) {
     console.log(`${CLI_NAME} — situational awareness across your Codex sessions\n`);
-    console.log(`Usage: ${CLI_NAME} [--adapter codex-code|claude-code|fleet|mev-searcher|validator-fleet|sales] [--json] [--minutes N] [--all] [--limit N]`);
+    console.log(`Usage: ${CLI_NAME} [--json] [--minutes N] [--all] [--limit N]`);
     console.log(`       ${CLI_NAME} up        # open the web cockpit`);
     console.log(`       ${CLI_NAME} help      # full command list`);
     return;
@@ -107,7 +101,7 @@ async function main() {
 
   const rows = await engine.collect(adapter, args);
   if (args.json) {
-    console.log(JSON.stringify({ generatedAt: new Date().toISOString(), adapter: args.adapter, windowMinutes: args.minutes, count: rows.length, sessions: rows }, null, 2));
+    console.log(JSON.stringify({ generatedAt: new Date().toISOString(), source: 'codex', windowMinutes: args.minutes, count: rows.length, sessions: rows }, null, 2));
     return;
   }
   render(rows, args, adapter);

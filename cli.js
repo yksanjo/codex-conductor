@@ -18,8 +18,8 @@ const HELP = `Codex Conductor — situational awareness + control across your Co
 
 read
   ${CLI_NAME}                list your live Codex sessions (table)
-  ${CLI_NAME} ls [opts]        opts: --adapter NAME  --minutes N  --all  --json  --limit N
-  ${CLI_NAME} up [opts]        launch the web cockpit  (--adapter NAME, --port N, --no-open)
+  ${CLI_NAME} ls [opts]        opts: --minutes N  --all  --json  --limit N
+  ${CLI_NAME} up [opts]        launch the web cockpit  (--port N, --no-open)
   ${CLI_NAME} mcp              run the MCP server (stdio)
 
 copilot seats (scoped remote co-working — deny-by-default)
@@ -29,13 +29,8 @@ copilot seats (scoped remote co-working — deny-by-default)
   ${CLI_NAME} seat-mcp         run the copilot's side (stdio) — connect to a host's seat with the
                              credential they shared, then see ONLY the windows they granted.
 
-adapters (--adapter NAME, default codex-code)
-  codex-code               your local Codex CLI/app sessions from ~/.codex/sessions
-  claude-code              your live Claude Code windows (tmux control plane)
-  fleet                    a trading-bot fleet at ~/.fleet/bots/*/events.jsonl
-  mev-searcher             a MEV searcher fleet (read-only liveness/pnl trails)
-  validator-fleet          Solana validators by vote liveness (read-only)
-  sales                    a sales-agent fleet at ~/.fleet/sales/*/events.jsonl (governed; pause/kill)
+session source
+  Codex local transcripts from ~/.codex/sessions
 
 control (tmux-managed windows)
   ${CLI_NAME} run <label> [-- codex args]  launch a managed Codex window in tmux
